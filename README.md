@@ -8,7 +8,7 @@ The performer drives every change by hand. There is no audio analysis, no beat d
 
 ## Status
 
-Early. Milestones M0 (scaffold, song player), M1 (classic Physarum) and M2 (extended Physarum with presets and a pen) are done. A million agents grow a live slime-mold network; in the extended mode 22 presets give veins, cells, stripes, mazes or worms, and the pointer is a pen that runs a second preset in a soft circle around it. Flow fields, steering, flocking, shared rendering and the scene system come next (M3 to M6). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
+Early. Milestones M0 (scaffold, song player), M1 (classic Physarum), M2 (extended Physarum with presets and a pen) and M3 (flow field and flow followers) are done. A million agents grow a live slime-mold network; in the extended mode 22 presets give veins, cells, stripes, mazes or worms, and the pointer is a pen that runs a second preset in a soft circle around it. A second agent family, flow followers, steers along a noise flow field that the pen can swirl, attract or repel, and draws into the same picture. Flocking, coupling between the families, shared rendering and the scene system come next (M4 to M6). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
 
 ## Requirements
 
@@ -35,14 +35,17 @@ Once the site has been opened online one time, it reloads with no connection (a 
 | P | Show or hide the setup panel (it fades, so an embedded player keeps playing) |
 | T | Show or hide the tuning panel (agent rule, presets, sliders; hover a control for what it does and what was measured) |
 | R | Reset: agents scatter and the trail clears |
+| V | Draw the flow field as arrows (debug overlay) |
 
-On the picture, in the extended mode (choose "extended" under "agent rule" in the tuning panel):
+Flow followers: in the tuning panel raise "followers" (and, to see them alone, set "Physarum agents" to off). For thin strokes use the curl field, a slow trail decay (about 0.96) and tens of thousands of followers.
+
+On the picture, in the extended mode (choose "extended" under "agent rule" in the tuning panel), or with followers on and a pen edit chosen:
 
 | Input | Action |
 |---|---|
 | Move the mouse | The pen: a soft circle around the pointer that runs the pen preset |
 | Wheel | Pen size (temporary; becomes the intensity macro in M6) |
-| Left click | A wave: an expanding front from the pointer |
+| Left click | A wave: an expanding front from the pointer (extended mode) |
 | Hold the right button and move | Stir: agents near the pen are pushed in the drag direction |
 
 The scene system and the full live vocabulary (next and previous scene, jump, freeze, safe mode, cue panel) arrive with milestone M6.

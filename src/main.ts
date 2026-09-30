@@ -56,8 +56,9 @@ const hud = new Hud($('hud'), () => {
         : 'classic'
     }\n` +
     (gpu.hasTimestampQuery && t
-      ? `GPU ms: agents ${fmt(t.agent)}, deposit ${fmt(t.deposit)}, diffuse ${fmt(t.diffuse)}, display ${fmt(t.render)}\n`
+      ? `GPU ms: agents ${fmt(t.agent)}, followers ${fmt(t.followers)}, field ${fmt(t.field)}, deposit ${fmt(t.deposit)}, diffuse ${fmt(t.diffuse)}, display ${fmt(t.render)}\n`
       : 'GPU timing unavailable (no timestamp-query)\n') +
+    `followers ${Math.floor(params.followerCount).toLocaleString()}, Physarum ${params.physarumOn ? 'on' : 'off'}, field arrows ${physarum?.fieldArrows ? 'on' : 'off'}\n` +
     `adapter ${info.vendor || '?'} ${info.architecture || ''} ${info.description || ''}\n` +
     `validation errors ${validationErrors}, device losses ${lostCount}`
   );
@@ -168,7 +169,7 @@ function frame(now: number): void {
  * weight, so the alternate state visibly fades out around it.
  */
 function updatePenRing(): void {
-  const show = !!physarum && params.mode === MODE_EXTENDED && physarum.pen.active;
+  const show = !!physarum && physarum.penUsed && physarum.pen.active;
   penRing.hidden = !show;
   if (!show || !physarum) return;
   const r = params.penRadius * canvas.clientHeight;
@@ -189,7 +190,7 @@ function setUpPointer(): void {
   const norm = (ev: PointerEvent) => ({ x: ev.clientX / canvas.clientWidth, y: ev.clientY / canvas.clientHeight });
 
   canvas.addEventListener('pointermove', (ev) => {
-    if (!physarum || params.mode !== MODE_EXTENDED) return;
+    if (!physarum || !physarum.penUsed) return;
     const { x, y } = norm(ev);
     physarum.setPen(x, y, true);
     if (ev.buttons & 2) {
@@ -200,16 +201,16 @@ function setUpPointer(): void {
   });
   canvas.addEventListener('pointerleave', () => physarum?.setPen(physarum.pen.x, physarum.pen.y, false));
   canvas.addEventListener('pointerdown', (ev) => {
-    if (!physarum || params.mode !== MODE_EXTENDED) return;
+    if (!physarum || !physarum.penUsed) return;
     const { x, y } = norm(ev);
     physarum.setPen(x, y, true);
-    if (ev.button === 0) physarum.triggerWave(x, y);
+    if (ev.button === 0 && params.mode === MODE_EXTENDED) physarum.triggerWave(x, y); // waves exist in the extended mode
   });
   canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
   canvas.addEventListener(
     'wheel',
     (ev) => {
-      if (params.mode !== MODE_EXTENDED) return;
+      if (!physarum?.penUsed) return;
       ev.preventDefault();
       params.penRadius = Math.min(PEN_MAX, Math.max(PEN_MIN, params.penRadius * Math.exp(-ev.deltaY * 0.001)));
       tuning.refresh();
@@ -238,6 +239,11 @@ function onKey(ev: KeyboardEvent): void {
     case 't':
     case 'T':
       tuningEl.hidden = !tuningEl.hidden;
+      break;
+    case 'v':
+    case 'V':
+      // Debug overlay: the flow field as arrows (not part of the live vocabulary).
+      if (physarum) physarum.fieldArrows = !physarum.fieldArrows;
       break;
     case 'r':
     case 'R':

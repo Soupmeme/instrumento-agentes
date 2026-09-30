@@ -18,6 +18,10 @@ struct Params {
   canvasWidth: f32,    // only the display pass uses these two
   canvasHeight: f32,
   countScale: f32,     // deposit density compensation (1 in classic mode, see extended.ts)
+  followerDeposit: f32, // trail left per follower (sqrt of the follower count in a pixel times this)
+  pad1: f32,
+  pad2: f32,
+  pad3: f32,
 }
 
 // One agent. pos is NORMALISED (0..1 across the world) so the simulation grid can be resized

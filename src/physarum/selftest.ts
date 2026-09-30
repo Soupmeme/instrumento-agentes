@@ -8,6 +8,10 @@
 //      awake agents (no agent lost or counted twice).
 //   3. Health: no NaN in agents or trail, positions inside the world, trail non-negative.
 //   4. Determinism: the same seed and the same number of steps give bit-identical agents.
+//   6. Flow layer: the field pass (noise angle, curl, quantized, pen swirl with stir) is compared
+//      cell by cell with the CPU reference (flowfield.ts); the follower pass is compared with the
+//      CPU steering rule using the GPU's own field as data (so it isolates the steering and the
+//      interpolation from the noise); plus counter sum, no NaN, speed cap and determinism.
 //   5. Extended mode (36 Points rule): controlled agents on a hand-built trail are stepped once
 //      by move_extended.wgsl and compared with the CPU reference (extended.ts), for the
 //      background preset, for the pen preset (pen exactly on the agent), for trail-dependent
@@ -23,6 +27,7 @@ import { sensorCell, stepAgent, wrap, type AgentState, type StepParams } from '.
 import { extendedValues, mixVectors, pixelScaleFor, stepAgentExtended } from './extended.ts';
 import { MODE_CLASSIC, MODE_EXTENDED, modeDefaults } from './params';
 import { presetOfSlot } from './presets';
+import { fieldVector, stepFollower, KIND_NOISE_ANGLE, KIND_CURL, PEN_NONE, PEN_SWIRL, type FieldConfig, type FollowerConfig } from '../flow/flowfield.ts';
 
 export interface SelfTestResult {
   adapter: string;
@@ -59,7 +64,7 @@ async function runChecks(p: Physarum): Promise<SelfTestResult> {
   const H = p.gridHeight;
 
   // ---- 1. Agent rule against the CPU reference ----
-  Object.assign(p.params, { mode: MODE_CLASSIC, sensorDistance: 10, sensorAngle: 0.7, rotationAngle: 0.5, moveDistance: 2, respawnRate: 0 });
+  Object.assign(p.params, { mode: MODE_CLASSIC, physarumOn: 1, followerCount: 0, sensorDistance: 10, sensorAngle: 0.7, rotationAngle: 0.5, moveDistance: 2, respawnRate: 0 });
   const sp: StepParams = {
     width: W,
     height: H,
@@ -127,7 +132,7 @@ async function runChecks(p: Physarum): Promise<SelfTestResult> {
 
   // ---- 2 and 3. Counter invariant and health, with the real agent count ----
   const N = 100_000;
-  Object.assign(p.params, saved, { mode: MODE_CLASSIC, agentCount: N });
+  Object.assign(p.params, saved, { mode: MODE_CLASSIC, physarumOn: 1, followerCount: 0, agentCount: N });
   p.reset(1234);
   for (let i = 0; i < 5; i++) p.step();
 
@@ -177,6 +182,9 @@ async function runChecks(p: Physarum): Promise<SelfTestResult> {
   // ---- 5. Extended mode ----
   checks.push(...(await extendedChecks(p)));
 
+  // ---- 6. Flow field and flow followers ----
+  checks.push(...(await flowChecks(p)));
+
   // Leave the instrument as we found it, with a fresh random start.
   Object.assign(p.params, saved);
   p.reset();
@@ -201,6 +209,8 @@ async function extendedChecks(p: Physarum): Promise<SelfTestResult['checks']> {
   const PEN = 13;
   Object.assign(p.params, modeDefaults(MODE_EXTENDED), {
     mode: MODE_EXTENDED,
+    physarumOn: 1,
+    followerCount: 0,
     backgroundPreset: BG,
     penPreset: PEN,
     presetSeconds: 0,
@@ -325,5 +335,155 @@ async function extendedChecks(p: Physarum): Promise<SelfTestResult['checks']> {
   check('extended determinism: same seed and steps give identical agents', diff === 0, `${diff} differing values of ${first.length}`);
 
   p.setPen(0.5, 0.5, false);
+  return checks;
+}
+
+/** Checks of the flow field pass and the flow followers. See the header of this file. */
+async function flowChecks(p: Physarum): Promise<SelfTestResult['checks']> {
+  const checks: SelfTestResult['checks'] = [];
+  const check = (name: string, ok: boolean, detail = '') => checks.push({ name, ok, detail });
+  const W = p.gridWidth;
+  const H = p.gridHeight;
+  const fw = p.flow.fieldWidth;
+  const fh = p.flow.fieldHeight;
+
+  // Followers only, no Physarum, nothing random: the field is rebuilt by every step.
+  Object.assign(p.params, {
+    mode: MODE_CLASSIC,
+    physarumOn: 0,
+    followerCount: 1,
+    followerSpeed: 2.5,
+    followerForce: 0.12,
+    followerLookahead: 0,
+    followerRespawn: 0,
+    fieldStrength: 0.8,
+    penFieldMode: PEN_NONE,
+    penFieldStrength: 0.9,
+    penRadius: 0.25,
+  });
+
+  // ---- the field pass against the CPU reference ----
+  type FieldCase = { name: string; set: Partial<typeof p.params>; pen?: boolean; tolerantCells?: number };
+  const fieldCases: FieldCase[] = [
+    { name: 'noise angle', set: { fieldKind: KIND_NOISE_ANGLE, fieldFrequency: 3.7, fieldEvolution: 0.3, fieldQuantSteps: 0 } },
+    { name: 'curl noise', set: { fieldKind: KIND_CURL, fieldFrequency: 5, fieldEvolution: 0.2, fieldQuantSteps: 0 } },
+    // A cell whose angle sits within float error of a snapping boundary can land on the other
+    // side, so a tiny share of quantized cells may differ by one snap step.
+    { name: 'quantized to 6 angles', set: { fieldKind: KIND_NOISE_ANGLE, fieldFrequency: 3, fieldEvolution: 0.1, fieldQuantSteps: 6 }, tolerantCells: Math.ceil(fw * fh * 0.01) },
+    { name: 'pen swirl with stir', set: { fieldKind: KIND_NOISE_ANGLE, fieldFrequency: 3, fieldEvolution: 0.1, fieldQuantSteps: 0, penFieldMode: PEN_SWIRL }, pen: true },
+  ];
+
+  for (const c of fieldCases) {
+    Object.assign(p.params, c.set);
+    p.reset(5);
+    p.setPen(0.4, 0.6, !!c.pen);
+    for (let i = 0; i < 29; i++) p.step();
+    p.pen.stirX = c.pen ? 0.5 : 0;
+    p.pen.stirY = c.pen ? -0.3 : 0;
+    const stirUsed: [number, number] = [p.pen.stirX, p.pen.stirY];
+    p.step(); // the field of this step uses simulation time 29 / 60 and the stir set above
+    const gpuField = new Float32Array(await p.debugRead(p.flow.fieldBuffer, fw * fh * 8));
+
+    const cfg: FieldConfig = {
+      kind: p.params.fieldKind,
+      frequency: p.params.fieldFrequency,
+      evolution: p.params.fieldEvolution,
+      strength: p.params.fieldStrength,
+      quantSteps: p.params.fieldQuantSteps,
+      time: 29 / 60,
+      aspect: W / H,
+      penX: 0.4,
+      penY: 0.6,
+      penSigma: p.params.penRadius,
+      penActive: !!c.pen,
+      penMode: p.params.penFieldMode,
+      penStrength: p.params.penFieldStrength,
+      stirX: stirUsed[0],
+      stirY: stirUsed[1],
+    };
+    let worst = 0;
+    let bad = 0;
+    for (let cy = 0; cy < fh; cy++) {
+      for (let cx = 0; cx < fw; cx++) {
+        const want = fieldVector(cfg, (cx + 0.5) / fw, (cy + 0.5) / fh);
+        const i = cy * fw + cx;
+        const err = Math.hypot(gpuField[2 * i] - want[0], gpuField[2 * i + 1] - want[1]);
+        worst = Math.max(worst, err);
+        if (err > 2e-3) bad++;
+      }
+    }
+    const allowed = c.tolerantCells ?? 0;
+    check(`flow field: ${c.name}`, bad <= allowed, `${fw}x${fh} cells, ${bad} differ by more than 2e-3 (allowed ${allowed}), worst ${worst.toExponential(1)}`);
+  }
+
+  // ---- the follower step against the CPU steering rule, on the GPU's own field ----
+  Object.assign(p.params, { fieldKind: KIND_NOISE_ANGLE, fieldFrequency: 3, fieldEvolution: 0.1, fieldQuantSteps: 0, penFieldMode: PEN_NONE });
+  const cases: { name: string; pos: [number, number]; vel: [number, number]; lookahead: number; force: number }[] = [
+    { name: 'at rest, accelerates toward the field', pos: [0.2 * W, 0.3 * H], vel: [0, 0], lookahead: 0, force: 0.12 },
+    { name: 'moving against the field, turns around within the force limit', pos: [0.5 * W, 0.5 * H], vel: [-2.5, 0], lookahead: 0, force: 0.12 },
+    { name: 'strong force snaps onto the field', pos: [0.7 * W, 0.4 * H], vel: [1, 1], lookahead: 0, force: 5 },
+    { name: 'weak force barely changes velocity', pos: [0.3 * W, 0.8 * H], vel: [2, -1], lookahead: 0, force: 0.005 },
+    { name: 'look-ahead reads the field ahead', pos: [0.6 * W, 0.6 * H], vel: [2.4, 0.5], lookahead: 25, force: 0.3 },
+    { name: 'wraps across the world edge', pos: [W - 0.4, 0.5 * H], vel: [2.5, 0], lookahead: 10, force: 0.4 },
+  ];
+  for (const c of cases) {
+    p.params.followerCount = 1;
+    p.params.followerForce = c.force;
+    p.params.followerLookahead = c.lookahead;
+    p.reset(6);
+    p.debugWriteBuffer(p.flow.vehicleBuffer, new Float32Array([c.pos[0] / W, c.pos[1] / H, c.vel[0], c.vel[1]]));
+    p.step();
+    const gpuField = new Float32Array(await p.debugRead(p.flow.fieldBuffer, fw * fh * 8));
+    const out = new Float32Array(await p.debugRead(p.flow.vehicleBuffer, 16));
+
+    const fc: FollowerConfig = {
+      width: W, height: H, fieldW: fw, fieldH: fh, maxSpeed: p.params.followerSpeed, maxForce: c.force, lookahead: c.lookahead,
+    };
+    // The vehicle was stored as float32 normalised position: use the same rounded value.
+    const start = new Float32Array([c.pos[0] / W, c.pos[1] / H]);
+    const want = stepFollower(gpuField, [start[0] * W, start[1] * H], c.vel, fc);
+    const dpx = Math.abs((((out[0] * W - want.pos[0]) + W / 2) % W + W) % W - W / 2);
+    const dpy = Math.abs((((out[1] * H - want.pos[1]) + H / 2) % H + H) % H - H / 2);
+    const dv = Math.hypot(out[2] - want.vel[0], out[3] - want.vel[1]);
+    check(
+      `follower steering: ${c.name}`,
+      dpx < 2e-3 && dpy < 2e-3 && dv < 1e-4,
+      `velocity (${out[2].toFixed(3)}, ${out[3].toFixed(3)}), speed ${Math.hypot(out[2], out[3]).toFixed(3)} of max ${fc.maxSpeed}, position err ${Math.max(dpx, dpy).toExponential(1)} px, velocity err ${dv.toExponential(1)}`,
+    );
+  }
+
+  // ---- counter, health, determinism with a real number of followers ----
+  const N = 100_000;
+  Object.assign(p.params, { followerCount: N, followerForce: 0.12, followerLookahead: 6, followerRespawn: 0.002, fieldKind: KIND_CURL });
+  const runSteps = async (seed: number) => {
+    p.reset(seed);
+    for (let i = 0; i < 20; i++) p.step();
+    await p.whenIdle();
+    return new Float32Array(await p.debugRead(p.flow.vehicleBuffer, N * 16));
+  };
+  const first = await runSteps(77);
+  const counts = new Uint32Array(await p.debugRead(p.flow.counterBuffer, W * H * 4));
+  let sum = 0;
+  for (const v of counts) sum += v;
+  check('follower counter invariant: counts add up to the awake followers', sum === N, `sum ${sum}, followers ${N}`);
+  let bad = 0;
+  let outside = 0;
+  let fast = 0;
+  for (let i = 0; i < N; i++) {
+    const x = first[i * 4];
+    const y = first[i * 4 + 1];
+    const speed = Math.hypot(first[i * 4 + 2], first[i * 4 + 3]);
+    if (![x, y, speed].every(Number.isFinite)) bad++;
+    else {
+      if (x < 0 || x >= 1 || y < 0 || y >= 1) outside++;
+      if (speed > p.params.followerSpeed + 1e-4) fast++;
+    }
+  }
+  check('followers: no NaN, positions in [0,1), speed never above maxSpeed', bad === 0 && outside === 0 && fast === 0, `${bad} bad, ${outside} outside, ${fast} too fast`);
+  const second = await runSteps(77);
+  let diff = 0;
+  for (let i = 0; i < first.length; i++) if (first[i] !== second[i]) diff++;
+  check('follower determinism: same seed and steps give identical followers', diff === 0, `${diff} differing values of ${first.length}`);
+
   return checks;
 }

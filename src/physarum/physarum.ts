@@ -26,12 +26,13 @@ import moveExtendedWgsl from './move_extended.wgsl?raw';
 import depositWgsl from './deposit.wgsl?raw';
 import diffuseWgsl from './diffuse.wgsl?raw';
 import displayWgsl from './display.wgsl?raw';
+import { FlowLayer, type FlowInput } from '../flow/flow';
 
 /** Agents allocated up front. `params.agentCount` of them are awake. 2M x 16 B = 32 MB. */
 export const MAX_AGENTS = 2_000_000;
 const AGENT_BYTES = 16; // vec2f pos, f32 heading, f32 progress
 const VELOCITY_BYTES = 8; // vec2f, used only by the extended mode (inertia)
-const PARAM_BYTES = 64;
+const PARAM_BYTES = 80;
 const EXT_FLOATS = 64;
 const WORKGROUP = 256;
 const MAX_GRID_SIDE = 1920;
@@ -55,6 +56,8 @@ export interface PassTimings {
   deposit: number;
   diffuse: number;
   render: number;
+  field: number;
+  followers: number;
 }
 
 // Timestamp slots: pass k uses queries 2k (begin) and 2k+1 (end).
@@ -62,13 +65,16 @@ const PASS_AGENT = 0;
 const PASS_DEPOSIT = 1;
 const PASS_DIFFUSE = 2;
 const PASS_RENDER = 3;
+const PASS_FIELD = 4;
+const PASS_FOLLOW = 5;
+const PASS_COUNT = 6;
 
 export type SpawnMode = 'ring' | 'center';
 
 export class Physarum {
   readonly params: PhysarumParams;
   /** Milliseconds per pass, from GPU timestamps (NaN when unsupported or not yet read). */
-  readonly timings: PassTimings = { agent: NaN, deposit: NaN, diffuse: NaN, render: NaN };
+  readonly timings: PassTimings = { agent: NaN, deposit: NaN, diffuse: NaN, render: NaN, field: NaN, followers: NaN };
   /** Set by the HUD: only read timings back while someone is looking at them. */
   wantTimings = false;
   /** While true the frame loop takes no simulation steps (Freeze, and the test harness). */
@@ -78,6 +84,11 @@ export class Physarum {
 
   /** The pen, in 0..1 across the world. `active` is false when the pointer is elsewhere. */
   readonly pen = { x: 0.5, y: 0.5, active: false, stirX: 0, stirY: 0 };
+
+  /** The flow layer: the flow field, the flow followers and the debug arrows. */
+  readonly flow: FlowLayer;
+  /** Draw the flow field as arrows over the picture (debug overlay, key V). */
+  fieldArrows = false;
 
   private gpu: Gpu;
   private width = 0;
@@ -125,6 +136,8 @@ export class Physarum {
   private waves = new Float32Array(WAVE_COUNT * 4);
   private nextWave = 0;
   private pendingSpawn: 0 | 1 | 2 = 0;
+  /** Which passes ran in the most recent step (for the timing readout). */
+  private ranLast: boolean[] = new Array(PASS_COUNT).fill(false);
 
   private querySet: GPUQuerySet | null = null;
   private resolveBuf: GPUBuffer | null = null;
@@ -137,6 +150,7 @@ export class Physarum {
     this.gpu = gpu;
     this.params = params;
     const { device } = gpu;
+    this.flow = new FlowLayer(gpu);
 
     this.paramsBuf = device.createBuffer({
       label: 'physarum params',
@@ -189,13 +203,13 @@ export class Physarum {
     });
 
     if (gpu.hasTimestampQuery) {
-      this.querySet = device.createQuerySet({ type: 'timestamp', count: 8 });
+      this.querySet = device.createQuerySet({ type: 'timestamp', count: 2 * PASS_COUNT });
       this.resolveBuf = device.createBuffer({
-        size: 64,
+        size: 16 * PASS_COUNT,
         usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
       });
       this.stagingBuf = device.createBuffer({
-        size: 64,
+        size: 16 * PASS_COUNT,
         usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
       });
     }
@@ -247,6 +261,7 @@ export class Physarum {
     const storage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC;
     this.trail = [0, 1].map((i) => device.createBuffer({ label: `physarum trail ${i}`, size: bytes, usage: storage }));
     this.counter = device.createBuffer({ label: 'physarum counter', size: bytes, usage: storage });
+    this.flow.resize(w, h); // the flow layer's grid-sized buffers follow the grid
     this.cur = 0;
 
     const entry = (binding: number, buffer: GPUBuffer): GPUBindGroupEntry => ({ binding, resource: { buffer } });
@@ -281,7 +296,7 @@ export class Physarum {
       this.depositBG.push(
         device.createBindGroup({
           layout: this.depositPipe.getBindGroupLayout(0),
-          entries: [params, entry(1, this.counter), entry(2, here)],
+          entries: [params, entry(1, this.counter), entry(2, here), entry(3, this.flow.counterBuffer)],
         }),
       );
       this.diffuseBG.push(
@@ -319,6 +334,8 @@ export class Physarum {
     pass.end();
     device.queue.submit([enc.finish()]);
     this.cur = 0;
+
+    this.flow.reset(this.seed, this.flowInput());
 
     // Waves, bursts and stir belong to the run that just ended.
     for (let w = 0; w < WAVE_COUNT; w++) this.waves.set([0.5, 0.5, NEVER, 0.5], w * 4);
@@ -370,6 +387,23 @@ export class Physarum {
       this.bgNow[i] = this.bgFrom[i] + (this.bgTo[i] - this.bgFrom[i]) * e;
       this.penNow[i] = this.penFrom[i] + (this.penTo[i] - this.penFrom[i]) * e;
     }
+  }
+
+  /** True when the pen means something: the extended mode, or followers with a pen edit. */
+  get penUsed(): boolean {
+    return this.params.mode === MODE_EXTENDED || (this.params.followerCount > 0 && this.params.penFieldMode > 0);
+  }
+
+  private flowInput(): FlowInput {
+    return {
+      params: this.params,
+      gridWidth: this.width,
+      gridHeight: this.height,
+      frame: this.frame,
+      seed: this.seed,
+      time: this.simTime,
+      pen: this.pen,
+    };
   }
 
   /** True while a preset transition is still easing. */
@@ -460,6 +494,7 @@ export class Physarum {
     f[13] = this.canvasWidth;
     f[14] = this.canvasHeight;
     f[15] = p.mode === MODE_EXTENDED && n > 0 ? countScaleFor(n, this.width, this.height) : 1;
+    f[16] = p.followerDeposit;
     this.gpu.device.queue.writeBuffer(this.paramsBuf, 0, buf);
   }
 
@@ -478,31 +513,56 @@ export class Physarum {
   /** Advance the simulation by one step. Submits its own work. */
   step(): void {
     const { device } = this.gpu;
-    const extended = this.params.mode === MODE_EXTENDED;
+    const p = this.params;
+    const extended = p.mode === MODE_EXTENDED;
 
     if (extended) {
       this.syncPresets();
       this.advanceTransition();
       this.writeExt();
       this.pendingSpawn = 0; // a spawn lasts exactly one step
-      this.pen.stirX *= STIR_DECAY;
-      this.pen.stirY *= STIR_DECAY;
     }
     this.writeParams();
 
+    // Which agent families run this step. The field is built when something reads it (the
+    // followers) or shows it (the debug arrows).
+    const physarumAgents = p.physarumOn ? Math.max(0, Math.floor(p.agentCount)) : 0;
+    const followers = Math.max(0, Math.min(1_000_000, Math.floor(p.followerCount)));
+    const needField = followers > 0 || this.fieldArrows;
+    if (needField) this.flow.writeUniform(this.flowInput());
+
+    // The pen's stir push fades by itself once the pointer stops.
+    this.pen.stirX *= STIR_DECAY;
+    this.pen.stirY *= STIR_DECAY;
+
     const groupsX = Math.ceil(this.width / 8);
     const groupsY = Math.ceil(this.height / 8);
+    const ran = new Array<boolean>(PASS_COUNT).fill(false);
 
     const enc = device.createCommandEncoder({ label: 'physarum step' });
     enc.clearBuffer(this.counter);
+    enc.clearBuffer(this.flow.counterBuffer);
 
-    let pass = enc.beginComputePass({ label: 'agents', timestampWrites: this.stamps(PASS_AGENT) });
-    pass.setPipeline(extended ? this.moveExtPipe : this.movePipe);
-    pass.setBindGroup(0, (extended ? this.moveExtBG : this.moveBG)[this.cur]);
-    this.dispatch1D(pass, this.params.agentCount);
-    pass.end();
+    if (needField) {
+      this.flow.encodeField(enc, this.stamps(PASS_FIELD));
+      ran[PASS_FIELD] = true;
+    }
 
-    pass = enc.beginComputePass({ label: 'deposit', timestampWrites: this.stamps(PASS_DEPOSIT) });
+    if (physarumAgents > 0) {
+      const pass = enc.beginComputePass({ label: 'agents', timestampWrites: this.stamps(PASS_AGENT) });
+      pass.setPipeline(extended ? this.moveExtPipe : this.movePipe);
+      pass.setBindGroup(0, (extended ? this.moveExtBG : this.moveBG)[this.cur]);
+      this.dispatch1D(pass, physarumAgents);
+      pass.end();
+      ran[PASS_AGENT] = true;
+    }
+
+    if (followers > 0) {
+      this.flow.encodeFollowers(enc, followers, this.stamps(PASS_FOLLOW));
+      ran[PASS_FOLLOW] = true;
+    }
+
+    let pass = enc.beginComputePass({ label: 'deposit', timestampWrites: this.stamps(PASS_DEPOSIT) });
     pass.setPipeline(this.depositPipe);
     pass.setBindGroup(0, this.depositBG[this.cur]);
     pass.dispatchWorkgroups(groupsX, groupsY);
@@ -513,11 +573,14 @@ export class Physarum {
     pass.setBindGroup(0, this.diffuseBG[this.cur]);
     pass.dispatchWorkgroups(groupsX, groupsY);
     pass.end();
+    ran[PASS_DEPOSIT] = true;
+    ran[PASS_DIFFUSE] = true;
 
     device.queue.submit([enc.finish()]);
     this.cur = 1 - this.cur; // the diffuse pass wrote the newest trail into the other buffer
     this.frame++;
     this.totalSteps++;
+    this.ranLast = ran;
     this.stepRanSinceResolve = true;
   }
 
@@ -545,10 +608,12 @@ export class Physarum {
     pass.draw(3);
     pass.end();
 
+    if (this.fieldArrows) this.flow.renderArrows(encoder, view, canvasWidth, canvasHeight);
+
     // Timings are read back only while the HUD is open, once per step, never in the normal path.
     if (this.wantTimings && this.stepRanSinceResolve && this.querySet && !this.stagingBusy) {
-      encoder.resolveQuerySet(this.querySet, 0, 8, this.resolveBuf!, 0);
-      encoder.copyBufferToBuffer(this.resolveBuf!, 0, this.stagingBuf!, 0, 64);
+      encoder.resolveQuerySet(this.querySet, 0, 2 * PASS_COUNT, this.resolveBuf!, 0);
+      encoder.copyBufferToBuffer(this.resolveBuf!, 0, this.stagingBuf!, 0, 16 * PASS_COUNT);
       this.pendingRead = true;
       this.stepRanSinceResolve = false;
     }
@@ -565,11 +630,14 @@ export class Physarum {
       .then(() => {
         const t = new BigUint64Array(staging.getMappedRange().slice(0));
         staging.unmap();
-        const ms = (k: number) => Number(t[2 * k + 1] - t[2 * k]) / 1e6;
+        // A pass that did not run in the latest step has no fresh timestamps: report NaN.
+        const ms = (k: number) => (k === PASS_RENDER || this.ranLast[k] ? Number(t[2 * k + 1] - t[2 * k]) / 1e6 : NaN);
         this.timings.agent = ms(PASS_AGENT);
         this.timings.deposit = ms(PASS_DEPOSIT);
         this.timings.diffuse = ms(PASS_DIFFUSE);
         this.timings.render = ms(PASS_RENDER);
+        this.timings.field = ms(PASS_FIELD);
+        this.timings.followers = ms(PASS_FOLLOW);
       })
       .catch(() => undefined)
       .finally(() => {
@@ -582,6 +650,11 @@ export class Physarum {
   /** Overwrite the first agents (x, y normalised; heading radians; progress). Tests only. */
   debugWriteAgents(data: Float32Array): void {
     this.gpu.device.queue.writeBuffer(this.agentsBuf, 0, data);
+  }
+
+  /** Overwrite the start of any of our buffers. Tests only. */
+  debugWriteBuffer(buffer: GPUBuffer, data: ArrayBufferView): void {
+    this.gpu.device.queue.writeBuffer(buffer, 0, data.buffer, data.byteOffset, data.byteLength);
   }
 
   /** Overwrite the newest trail with a full grid of values. Tests only. */

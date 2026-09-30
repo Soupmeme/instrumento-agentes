@@ -184,3 +184,101 @@ In a dev build (`npm run dev`), console:
 - `await __exp.gallery([0, 2, 4], {agents: 1000000})` looks at presets. `await __exp.transitions([[15, 21]])` checks transitions, `await __exp.filmstrip(15, 21)` shows one frame by frame.
 - `await __exp.penTest(21, 4)` compares pen on and off. `await __exp.effects()` measures spawn, wave and stir.
 - `await __physarumSelfTest()` compares the GPU with the CPU reference for both modes (22 checks).
+
+---
+
+## 3. Flow field and flow followers (steering)
+
+Milestone M3. Code: `src/steering/` (the steering library, WGSL and CPU), `src/flow/` (the field, the followers, the debug arrows; `flowfield.ts` is the readable CPU definition). Turn the family on with the "followers" slider in the tuning panel (T); turn the Physarum agents off with "Physarum agents: off" to see followers alone; press V to draw the field as arrows.
+
+**Evidence:** "Measured" means seed 7, 100k followers (200k for the pen), 600 steps (10 simulated seconds) after a reset, one NVIDIA GPU, curl field unless stated. Kiwi still verifies and owns the final wording. "Seen" means looked at in a screenshot, not measured.
+
+### The idea, and the rule that keeps it explainable
+
+The unit asks that the field of directions and the rule an agent uses to consult it be told apart. Here they are two separate things in the code and on screen:
+
+- **The field** is data: one vector per cell (16 px cells), rebuilt every step from noise that drifts slowly with time, plus whatever the pen does to it. It can be drawn (V) without any agent existing.
+- **The rule** is a steering behavior. A follower reads the field at one place and steers toward it. It never has its velocity set by the field directly.
+
+### The field
+
+| Item | How |
+|---|---|
+| Noise | 3D Perlin noise: x and y are space (in screen-height units, so the field looks the same at any resolution), z is time. Value 0 at lattice points, roughly -1..1, smooth |
+| Noise angle field | direction = noise mapped to an angle between 0 and 720 degrees (0 to 4 pi). Mapping to 0..360 would prefer flowing left, because Perlin values cluster near the middle (Nature of Code) |
+| Curl field | direction = the noise gradient turned 90 degrees. Followers then travel along the contour lines of the noise, and the field has no sinks |
+| Quantization | 0 keeps angles smooth; n snaps every direction to a multiple of 360/n degrees |
+| Strength | Every vector has this length (0..1) |
+| Pen edits | Within the pen radius the direction is blended toward: swirl (perpendicular to the direction to the pen), attract (toward it) or repel (away), weighted by exp(-d^2 / radius^2) times the edit strength. The drag direction (stir) also bends the field toward itself near the pen |
+
+### What a follower perceives
+
+| Item | Value |
+|---|---|
+| What it senses | The field vector at one place: its own position, or the place it will reach in `look-ahead` steps if it keeps its velocity (Reynolds' prediction) |
+| Interpolation | The field is blended between the four nearest cells (vector interpolation, so no angle wrap-around problem) |
+| What it ignores | Other followers, the Physarum agents, the trail, everything else |
+| Memory | Its velocity |
+
+### How it computes its action (one step)
+
+```
+desired  = field(here, or ahead) * maxSpeed
+steer    = limit(desired - velocity, maxForce)
+velocity = limit(velocity + steer, maxSpeed)
+position = position + velocity            (the world wraps)
+```
+
+The field says which way to go. The steering rule decides how the agent gets there: `maxForce` is the most it can change its velocity in one step, so it cannot turn instantly. Adding the field vector straight to the acceleration would ignore the current velocity, which is not steering. Occasionally (respawn) a follower jumps to a random place, at rest; without it followers gather along the field's sinks and the rest of the picture empties.
+
+### The steering library
+
+`steering.wgsl` (GPU) and `steering.ts` (CPU twin, unit tested) hold the behaviors every steering family shares. They differ only in how they choose the desired velocity:
+
+| Behavior | Desired velocity |
+|---|---|
+| follow field | field at (predicted) position * maxSpeed |
+| seek | toward the target at max speed |
+| flee | away from the target at max speed |
+| arrive | like seek, but inside a slowing radius the speed falls linearly to 0 |
+
+`steer = limit(desired - velocity, maxForce)` is shared. Only follow-field runs on the GPU so far; the flock (M4) will use the same functions. A behavior with nothing to say must not return a zero desired velocity (that would brake the agent to a stop): the caller simply does not apply it.
+
+### One material
+
+Followers do not draw separately. They count themselves into their own per-pixel counter and the deposit pass turns that into trail with its own weight ("follower trail"), next to the Physarum agents' contribution. So the two families share one trail, one blur, one decay and one tone curve, and Physarum agents sense the marks followers leave. Followers alone with a long trail give thin luminous strokes, seen in the live page.
+
+### Parameters: predicted versus measured
+
+The predictions were written before measuring. The hover text in the tuning panel repeats the measured version.
+
+| Parameter | Predicted | Measured | Verdict |
+|---|---|---|---|
+| max force | Low: turns wide and lazily. High: snaps onto the field | Alignment with the field (1 = exactly along it; unrelated pairing scores 0.34): force 0.02 gives 0.48 and speed 55% of max, 0.12 gives 0.96, 1 gives 0.999 | Supported |
+| max speed | Faster followers draw longer strokes | Mean speed is about 92% of it. With the same force, alignment falls as speed rises: 1.00 at 1, 0.97 at 2.5, 0.62 at 6 (turning radius is about speed squared over force) | Supported, plus an effect not predicted: fast followers cannot follow a curvy field |
+| look-ahead | Larger: starts turning before reaching a change | 10 steps: alignment 0.96 to 0.974. 30 steps: 0.82 and speed down to 66% of max | Partly. Helps a little, then hurts: reading the field too far away makes it irrelevant |
+| field kind | Noise angle has sinks, curl does not | Noise angle: followers gather into a few bright rivers (seen). Curl: alignment 0.974 and an unrelated-pairing score of 0.01, followers spread over vortices | Supported. Curl is incompressible, so a dense swarm averages into grain; use fewer followers and a slower decay to see strokes |
+| noise frequency | Higher: tighter turns | Turning per step 0.8, 1.5, 2.5 degrees at 1.5, 3, 8 features per screen height; alignment 0.99, 0.97, 0.88 | Supported |
+| field drift | 0 freezes the field: fixed streamlines | 0: 14% of followers stall at stagnation points, alignment 0.961. 0.08: 0.974. 0.8: 0.913 | Supported, plus stalled followers when frozen |
+| angle steps | Rockier, more geometric | 4 steps: right-angle streams, like a circuit board (seen) | Supported |
+| field strength | Scales desired speed; 0 stops them | Mean speed 0.24, 0.47, 0.92 of max at 0.25, 0.5, 1 | Supported (proportional) |
+| pen: swirl, attract, repel | Circle, gather, empty | Against a nearly uniform field: swirl circulation 0.23 to 0.87; attract inward motion -0.83; repel followers inside the pen 15.5k to 9k, outward drift +0.26 | Supported. Repel is the weakest effect |
+| pen edit strength | Stronger replaces the noise more | Swirl circulation 0.36 at 0.3, 0.87 at 0.9 | Supported |
+| follower respawn, follower trail | Draft | Not measured | Draft |
+
+### Performance and stability (this machine only)
+
+| Test | Result |
+|---|---|
+| Soak, 1M extended Physarum agents + 500k followers (curl), pen on, 30,003 steps (8.3 simulated minutes) | 0 NaN, 0 out-of-range, 0 followers faster than max speed, both counters exact at every check, 0.41 ms per step at full speed |
+| Live loop, same load, 60 s, simulated performer (pen circling, waves, pen edit mode changing) | Exactly 60 steps in every second. GPU total 1.6 ms median in the first quarter (followers still scattered), 0.46 ms in the last, worst 2.75 ms, one 20 ms frame in the minute |
+
+Per-pass timestamps overlap on the GPU, so a single pass can look slower than it is (the deposit pass showed 0.85 ms once); trust the total.
+
+### How to verify
+
+In a dev build (`npm run dev`), console:
+
+- `await __physarumSelfTest()` compares the GPU with the CPU references for all three families (35 checks).
+- `await __exp.followerStats({fieldKind: 1, followerForce: 0.02})` measures alignment, speed and turning for any setting. `await __exp.penFieldStats(1)` measures a pen edit (0 none, 1 swirl, 2 attract, 3 repel).
+- `__physarum.fieldArrows = true` (or key V) draws the field.

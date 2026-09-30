@@ -153,6 +153,14 @@ kbd {
   border-radius: 4px;
   font: inherit;
 }
+.tune-group {
+  margin: 12px 0 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(143, 180, 255, 0.18);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
 .tune-hint { margin: 8px 0 0; color: var(--dim); font-size: 11px; }
 #credits { margin: 6px 0; color: var(--dim); font-size: 11px; }
 #credits summary { cursor: pointer; }

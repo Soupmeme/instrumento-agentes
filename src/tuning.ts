@@ -122,8 +122,25 @@ export function buildTuning(
       'The rules that apply under the pen (the pointer). The pen and the background blend smoothly.'),
   );
 
-  // ---- sliders ----
+  // ---- sliders and choices, straight from the parameter list ----
   for (const spec of specs) {
+    if (spec.group) {
+      const heading = document.createElement('h3');
+      heading.className = 'tune-group';
+      heading.textContent = spec.group;
+      container.appendChild(heading);
+    }
+    if (spec.options) {
+      const choiceRow = select(
+        spec.label,
+        spec.options,
+        () => params[spec.key],
+        (v) => (params[spec.key] = v),
+        `${spec.hint} (one seed, developer machine; Kiwi to verify)`,
+      );
+      rows.push({ row: choiceRow, only: spec.only });
+      continue;
+    }
     const row = document.createElement('label');
     row.className = 'tune-row';
     row.title = `${spec.hint} (one seed, developer machine; Kiwi to verify)`;

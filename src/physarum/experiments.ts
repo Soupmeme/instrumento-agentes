@@ -14,6 +14,7 @@
 import type { Physarum } from './physarum';
 import { DEFAULT_PARAMS, MODE_EXTENDED, modeDefaults, type PhysarumParams } from './params';
 import { rowOfSlot } from './presets';
+import { sampleField } from '../flow/flowfield.ts';
 
 const TAU = Math.PI * 2;
 
@@ -609,6 +610,124 @@ export async function effects(p: Physarum, opts: { seed?: number; agents?: numbe
   return out;
 }
 
+// ---------------------------------------------------------------- flow followers
+
+/**
+ * How well followers trace the flow field, for one setting. Alignment is the mean cosine
+ * between a follower's direction of travel and the field direction at its position (1 = exactly
+ * along the field, 0 = unrelated). The baseline pairs each follower with the field at ANOTHER
+ * follower's position, which shows what "unrelated" scores. Turn is the mean change of heading
+ * per step, in degrees.
+ */
+export async function followerStats(
+  p: Physarum,
+  set: Partial<PhysarumParams> = {},
+  opts: { seed?: number; steps?: number; count?: number } = {},
+) {
+  const { seed = 7, steps = 600, count = 100_000 } = opts;
+  const saved = { ...p.params };
+  p.paused = true;
+  p.setPen(0.5, 0.5, false);
+  const fw = p.flow.fieldWidth;
+  const fh = p.flow.fieldHeight;
+  try {
+    Object.assign(p.params, DEFAULT_PARAMS, { physarumOn: 0, followerCount: count, decay: 0.96 }, set);
+    p.reset(seed);
+    for (let i = 0; i < steps; i++) p.step();
+    await p.whenIdle();
+    const before = await f32(p, p.flow.vehicleBuffer, count * 16);
+    p.step();
+    await p.whenIdle();
+    const after = await f32(p, p.flow.vehicleBuffer, count * 16);
+    const field = await f32(p, p.flow.fieldBuffer, fw * fh * 8);
+
+    let align = 0;
+    let base = 0;
+    let n = 0;
+    let speed = 0;
+    let turn = 0;
+    for (let i = 0; i < count; i++) {
+      const vx = after[i * 4 + 2];
+      const vy = after[i * 4 + 3];
+      const s = Math.hypot(vx, vy);
+      speed += s;
+      if (s < 0.05) continue;
+      const f = sampleField(field, fw, fh, after[i * 4], after[i * 4 + 1]);
+      const fl = Math.hypot(f[0], f[1]);
+      const j = (i + 12345) % count;
+      const g = sampleField(field, fw, fh, after[j * 4], after[j * 4 + 1]);
+      const gl = Math.hypot(g[0], g[1]);
+      if (fl > 1e-6 && gl > 1e-6) {
+        align += (vx * f[0] + vy * f[1]) / (s * fl);
+        base += (vx * g[0] + vy * g[1]) / (s * gl);
+        n++;
+      }
+      const ps = Math.hypot(before[i * 4 + 2], before[i * 4 + 3]);
+      if (ps > 0.05) turn += Math.abs(wrapAngle(Math.atan2(vy, vx) - Math.atan2(before[i * 4 + 3], before[i * 4 + 2])));
+    }
+    const maxSpeed = p.params.followerSpeed;
+    return {
+      alignment: r(align / (n || 1), 3),
+      baseline: r(base / (n || 1), 3),
+      meanSpeedOfMax: r(speed / count / maxSpeed, 3),
+      meanTurnDeg: r(((turn / count) * 180) / Math.PI, 2),
+      moving: n,
+    };
+  } finally {
+    Object.assign(p.params, saved);
+    p.reset();
+    p.paused = false;
+  }
+}
+
+/** Followers around a pen that edits the field: tangential and radial motion inside the pen. */
+export async function penFieldStats(
+  p: Physarum,
+  mode: number,
+  opts: { seed?: number; steps?: number; count?: number; sigma?: number; set?: Partial<PhysarumParams> } = {},
+) {
+  const { seed = 7, steps = 600, count = 200_000, sigma = 0.2, set = {} } = opts;
+  const saved = { ...p.params };
+  p.paused = true;
+  const W = p.gridWidth;
+  const H = p.gridHeight;
+  try {
+    Object.assign(p.params, DEFAULT_PARAMS, {
+      physarumOn: 0, followerCount: count, decay: 0.96, penRadius: sigma, penFieldMode: mode, penFieldStrength: 0.9, followerRespawn: 0.004,
+      ...set,
+    });
+    p.reset(seed);
+    p.setPen(0.5, 0.5, mode !== 0);
+    for (let i = 0; i < steps; i++) p.step();
+    await p.whenIdle();
+    const v = await f32(p, p.flow.vehicleBuffer, count * 16);
+    let tang = 0;
+    let rad = 0;
+    let n = 0;
+    for (let i = 0; i < count; i++) {
+      const dx = (v[i * 4] - 0.5) * (W / H);
+      const dy = v[i * 4 + 1] - 0.5;
+      const d = Math.hypot(dx, dy);
+      const s = Math.hypot(v[i * 4 + 2], v[i * 4 + 3]);
+      if (d > sigma || d < 0.02 || s < 0.05) continue;
+      // Velocity is in pixels, x and y equally scaled, so it can be used with the aspect-corrected offset.
+      const rx = dx / d;
+      const ry = dy / d;
+      const vx = v[i * 4 + 2] / s;
+      const vy = v[i * 4 + 3] / s;
+      tang += rx * vy - ry * vx; // +: counter-clockwise on screen coordinates (y down: clockwise looking)
+      rad += rx * vx + ry * vy; // +: away from the pen
+      n++;
+    }
+    return { mode, followersInsidePen: n, meanTangential: r(tang / (n || 1), 3), meanRadial: r(rad / (n || 1), 3) };
+  } finally {
+    Object.assign(p.params, saved);
+    p.setPen(0.5, 0.5, false);
+    p.reset();
+    p.paused = false;
+  }
+}
+
 /**
  * One transition, frame by frame: the trail just before the switch and at the given numbers of
  * steps after it (60 steps = 1 second). This is how the mid-transition look is judged.
@@ -904,6 +1023,29 @@ export function soak(p: Physarum, cfg: SoakConfig): Job {
           }
           const ts = analyzeTrail(trail, W, H);
           const ag = analyzeAgents(A, B, N, W, H, md);
+
+          // Flow followers: no NaN, inside the world, never faster than maxSpeed, counter exact.
+          const FN = Math.floor(p.params.followerCount);
+          let fNaN = 0;
+          let fOutside = 0;
+          let fFast = 0;
+          let fCounterMismatch = 0;
+          if (FN > 0) {
+            const V = await f32(p, p.flow.vehicleBuffer, FN * 16);
+            for (let i = 0; i < FN; i++) {
+              const x = V[i * 4];
+              const y = V[i * 4 + 1];
+              const sp = Math.hypot(V[i * 4 + 2], V[i * 4 + 3]);
+              if (![x, y, sp].every(Number.isFinite)) fNaN++;
+              else {
+                if (x < 0 || x >= 1 || y < 0 || y >= 1) fOutside++;
+                if (sp > p.params.followerSpeed + 1e-4) fFast++;
+              }
+            }
+            let fs = 0;
+            for (const c of await u32(p, p.flow.counterBuffer, W * H * 4)) fs += c;
+            fCounterMismatch = fs - FN;
+          }
           const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize;
           job.checks.push({
             step: job.done,
@@ -924,6 +1066,10 @@ export function soak(p: Physarum, cfg: SoakConfig): Job {
             stuckFrac: r(ag.stuckFrac, 5),
             respawnFrac: r(ag.respawnFrac, 4),
             heapMB: heap ? r(heap / 1048576, 1) : null,
+            followerNaN: fNaN,
+            followerOutside: fOutside,
+            followerTooFast: fFast,
+            followerCounterMismatch: fCounterMismatch,
           });
         }
       }
@@ -950,6 +1096,10 @@ export function soak(p: Physarum, cfg: SoakConfig): Job {
           counterSumMismatch: sumOf('counterSumMismatch'),
           trailNonFinite: sumOf('trailNonFinite'),
           agentsExactlyAtEdge: sumOf('atEdge'),
+          followerNaN: sumOf('followerNaN'),
+          followerOutside: sumOf('followerOutside'),
+          followerTooFast: sumOf('followerTooFast'),
+          followerCounterMismatch: sumOf('followerCounterMismatch'),
         },
       };
       job.status = 'done';
@@ -1055,6 +1205,8 @@ export function installExperiments(p: Physarum): void {
     transitions: (pairs: [number, number][], o?: Parameters<typeof transitions>[2]) => transitions(p, pairs, o),
     penTest: (bg: number, pen: number, o?: Parameters<typeof penTest>[3]) => penTest(p, bg, pen, o),
     effects: (o?: Parameters<typeof effects>[1]) => effects(p, o),
+    followerStats: (set?: Partial<PhysarumParams>, o?: Parameters<typeof followerStats>[2]) => followerStats(p, set, o),
+    penFieldStats: (mode: number, o?: Parameters<typeof penFieldStats>[2]) => penFieldStats(p, mode, o),
     filmstrip: (from: number, to: number, after?: number[], o?: Parameters<typeof filmstrip>[4]) => filmstrip(p, from, to, after, o),
     soak: (c: SoakConfig) => soak(p, c),
     monitor: (s: number) => monitor(p, s),

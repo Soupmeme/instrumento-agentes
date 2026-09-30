@@ -195,3 +195,44 @@ Criteria: clearly structured (not fine grain), distinct from each other, still a
 - The self-test did not pause the frame loop, so the loop's own 60 Hz steps landed between the test's steps. The determinism check then failed once extended mode made the runs slower. It had passed in M1 by luck of timing. The test now pauses the loop for its duration.
 - A first mutation check "survived" for two independent reasons: the test case that exercises the "left sensor is higher" branch used S = 0.3, which makes the sensor distance 0.64 px so all three sensors read the same cell (fixed: S = 0.55, about 30 px), and the dev server had missed my edit of the mutated file (fixed by restarting it and by checking the served code, not a comment, which Vite strips). After both fixes the mutation is caught, with a heading error of exactly twice the turn angle.
 - Node's native TypeScript mode needs `.ts` in import paths, so tsconfig allows importing `.ts` extensions (noEmit, so harmless) and the modules that tests import use them.
+
+## 2026-09-30, M3 flow field, flow followers, steering library
+
+**The field is a buffer of vectors on a coarse grid (16 px cells), rebuilt every step by a compute pass.**
+Alternatives: store an angle per cell, or evaluate the noise inside each follower's shader (no field buffer). SPEC 5.2 asks for the field to be data so it can be drawn, painted and read by other families, and vector interpolation avoids angle wrap-around. A field of about 66x58 cells costs nothing to rebuild per step. Followers interpolate between the four nearest cells, so motion is smooth.
+
+**Pen edits are procedural, applied on top of the noise each step, not painted into a persistent field.**
+Alternative: let the pen accumulate edits that persist and fade. That needs a second field buffer and decay rules and is harder to explain. A pen region that exists only while the pointer is there matches how the Physarum pen works (same gesture, same meaning, SPEC 8.4). Swirl, attract and repel are the three edits; the stir drag also bends the field near the pen. A wall edit (SPEC lists it) was not built: repel gives the same visible effect for followers.
+
+**Noise: Perlin gradient noise with an integer hash, identical on the CPU and GPU.**
+Alternatives: simplex (patented in some forms, harder to explain), value noise (blocky). Perlin is what Hobbs, Shiffman and Sofia's sketch use, and an integer hash written the same way in TypeScript and WGSL lets the self-test compare the GPU field with the CPU reference cell for cell (matched to about 6e-6). Noise coordinates are in screen-height units so the field looks the same at any resolution; the third axis is simulation time.
+
+**Two field constructions: noise angle (0..4 pi) and curl.**
+Noise angle is the Nature of Code construction (0..4 pi counters Perlin's habit of hugging the middle, which would otherwise favour one direction). Curl (the noise gradient turned 90 degrees) has no sinks. Both are one selector; the difference is visible and explainable (measured, see EXPLAINER.md).
+
+**Followers deposit into their own per-pixel counter; the deposit pass adds it to the shared trail with its own weight.**
+Alternative: a separate trail for followers, or writing the trail directly. A separate counter and weight keeps followers and Physarum agents in one material (SPEC section 2, "one image") and makes each family's share one live number. It also means Physarum agents sense follower marks; the explicit coupling controls of SPEC section 6 belong to M5. Cost: one more grid-sized buffer and one more read in the deposit pass.
+
+**Followers are stateless apart from position and velocity; respawn is a per-step chance, at rest.**
+Alternative: a progress counter per follower as in Physarum. A chance per step needs no extra state and gives the same average lifetime. Followers start at rest so the steering (acceleration limited by maxForce) is visible from the first frame.
+
+**A shared steering library, WGSL and CPU, with seek, flee and arrive as well as follow-field.**
+SPEC 5.3 wants the steering structure visible in the code. Only follow-field runs on the GPU in M3, but seek, flee and arrive are in the library and unit tested on the CPU so the flock (M4) and the pen (attract or repel boids) reuse them unchanged. `steer = limit(desired - velocity, maxForce)` is the one shared line. WGSL `round()` rounds halves to even and JavaScript's `Math.round` rounds them up; this only matters at exactly half the world width, where either way round is the same distance.
+
+**Followers are off by default (count 0), and the Physarum agents can be switched off.**
+So every M1 and M2 result stays valid and the scene system (M6) decides what runs. `followerCount` is a linear slider from 0 (a log slider cannot reach 0). Per-mode default follower trail weights (0.05 classic, 0.02 extended) match the brightness of each mode's Physarum deposit and are starting points, not tuned values.
+
+**The pen now serves any family that reads it: it exists in the extended mode, or when followers are on and the pen edits the field.**
+The wheel, right-drag stir and the ring follow it. The left-click wave stays extended-only because waves are a Physarum effect.
+
+**Field debug overlay on V, drawn as arrows over the picture, one per cell.**
+Arrows have constant length (direction is what is read) and opacity showing strength. Not part of the live vocabulary (SPEC 8.2); V is free.
+
+**GPU timestamp slots grew from 4 passes to 6 (field, followers added); passes that did not run in the latest step report "?".**
+Otherwise a pass that stopped running would keep showing an old time.
+
+**Test method: mutation checks with predicted failures.**
+Two mutations of the CPU references (the x component of the steering formula, the rotation direction of the pen swirl) were applied at the same time, and the set of failing checks was predicted before running: the swirl field case and the five follower cases with a nonzero x velocity should fail, and the at-rest follower case, the other field cases and the counter, health and determinism checks should pass. Exactly that happened. The served code was checked (not a comment, which the dev server strips) so the test could not silently run the unmutated file.
+
+**Measured hints replaced the drafts in the tuning panel.**
+Two were partly wrong: look-ahead helps at 10 steps but hurts at 30, and a faster follower with the same force follows a curvy field worse (turning radius grows with speed squared).

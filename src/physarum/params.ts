@@ -22,6 +22,34 @@ export interface PhysarumParams {
   inertia: number;
   /** Extended mode: seconds to ease from one preset to another when a slot changes. */
   presetSeconds: number;
+  /** 1: the Physarum agents run; 0: only the other agent families (followers) are simulated. */
+  physarumOn: number;
+  /** Flow followers: how many (0 = the family is off). */
+  followerCount: number;
+  /** Followers' maxSpeed, in simulation pixels per step. */
+  followerSpeed: number;
+  /** Followers' maxForce: the most a follower can change its velocity in one step. */
+  followerForce: number;
+  /** Steps ahead at which a follower samples the field (0 = where it is). */
+  followerLookahead: number;
+  /** Chance per step that a follower teleports to a random place. */
+  followerRespawn: number;
+  /** How much trail a follower leaves (the same role as depositFactor for Physarum agents). */
+  followerDeposit: number;
+  /** Flow field construction: FIELD_NOISE_ANGLE or FIELD_CURL (see flowfield.ts). */
+  fieldKind: number;
+  /** Noise features per screen height. Larger: a busier field with tighter curves. */
+  fieldFrequency: number;
+  /** How fast the field drifts through time, in noise units per second. 0 freezes it. */
+  fieldEvolution: number;
+  /** 0: smooth angles. n: angles snapped to multiples of 360/n degrees. */
+  fieldQuantSteps: number;
+  /** Length of every field vector, 0..1. It scales the followers' desired speed. */
+  fieldStrength: number;
+  /** What the pen does to the field near it: 0 nothing, 1 swirl, 2 attract, 3 repel. */
+  penFieldMode: number;
+  /** How strongly the pen's edit replaces the noise direction at the pen, 0..1. */
+  penFieldStrength: number;
   /** How many agents are simulated (the buffer holds MAX_AGENTS, the rest sleep). */
   agentCount: number;
   /** SD: how far ahead the three sensors sit, in simulation pixels. */
@@ -49,6 +77,20 @@ export const DEFAULT_PARAMS: Readonly<PhysarumParams> = {
   penRadius: 0.25,
   inertia: 0,
   presetSeconds: 0.5,
+  physarumOn: 1,
+  followerCount: 0,
+  followerSpeed: 2.5,
+  followerForce: 0.12,
+  followerLookahead: 0,
+  followerRespawn: 0.002,
+  followerDeposit: 0.05,
+  fieldKind: 0,
+  fieldFrequency: 3,
+  fieldEvolution: 0.08,
+  fieldQuantSteps: 0,
+  fieldStrength: 1,
+  penFieldMode: 1,
+  penFieldStrength: 0.9,
   agentCount: 400_000,
   sensorDistance: 16,
   sensorAngle: (45 * Math.PI) / 180,
@@ -70,11 +112,14 @@ export const DEFAULT_PARAMS: Readonly<PhysarumParams> = {
  */
 export function modeDefaults(
   mode: number,
-): Pick<PhysarumParams, 'decay' | 'depositFactor' | 'displayGain' | 'respawnRate' | 'agentCount'> {
+): Pick<PhysarumParams, 'decay' | 'depositFactor' | 'displayGain' | 'respawnRate' | 'agentCount' | 'followerDeposit'> {
   return mode === MODE_EXTENDED
-    ? { decay: 0.75, depositFactor: 0.003, displayGain: 30, respawnRate: 0.001, agentCount: 1_000_000 }
-    : { decay: 0.9, depositFactor: 0.05, displayGain: 6, respawnRate: 0.001, agentCount: 400_000 };
+    ? { decay: 0.75, depositFactor: 0.003, displayGain: 30, respawnRate: 0.001, agentCount: 1_000_000, followerDeposit: 0.02 }
+    : { decay: 0.9, depositFactor: 0.05, displayGain: 6, respawnRate: 0.001, agentCount: 400_000, followerDeposit: 0.05 };
 }
+
+export const FIELD_NOISE_ANGLE = 0;
+export const FIELD_CURL = 1;
 
 /** Switch mode and load that mode's trail defaults. */
 export function setMode(p: PhysarumParams, mode: number): void {
@@ -101,9 +146,21 @@ export interface ParamSpec {
   hint: string;
   /** Which mode the slider belongs to: the classic-only sliders are hidden in extended mode. */
   only?: 'classic' | 'extended';
+  /** A heading shown above this control in the panel (starts a new group). */
+  group?: string;
+  /** Present: shown as a dropdown of these choices instead of a slider (min and max unused). */
+  options?: { value: number; text: string }[];
 }
 
 export const PARAM_SPECS: readonly ParamSpec[] = [
+  {
+    key: 'physarumOn', label: 'Physarum agents', min: 0, max: 1, step: 1, group: 'Physarum',
+    options: [
+      { value: 1, text: 'on' },
+      { value: 0, text: 'off' },
+    ],
+    hint: 'Turn the Physarum agents off to see the other agent families alone.',
+  },
   {
     key: 'agentCount', label: 'agents', min: 10_000, max: 2_000_000, step: 1000, log: true,
     hint: 'Measured: 50k agents give a sparse network (26 closed cells, 8% coverage), 400k give 63 cells, 2M give 102 finer cells and brighter veins. At 2M, up to 671 agents pile into one pixel on the vein cores.',
@@ -151,5 +208,71 @@ export const PARAM_SPECS: readonly ParamSpec[] = [
   {
     key: 'presetSeconds', label: 'preset transition (s)', min: 0, max: 5, step: 0.1, only: 'extended',
     hint: 'Seconds to ease from the old preset to the new one when a preset changes. 0 switches at once.',
+  },
+
+  // ---- flow followers (steering agents that read the flow field) ----
+  {
+    key: 'followerCount', label: 'followers', min: 0, max: 1_000_000, step: 1000, group: 'Flow followers',
+    hint: 'How many steering agents follow the flow field. 0 turns the family off.',
+  },
+  {
+    key: 'followerSpeed', label: 'max speed', min: 0.3, max: 8, step: 0.1,
+    hint: 'Measured (curl field, force 0.12): mean speed is about 92% of this at field strength 1. A faster follower turns wider (turning radius is about speed squared over force), so its alignment with the field falls: 1.00 at speed 1, 0.97 at 2.5, 0.62 at 6.',
+  },
+  {
+    key: 'followerForce', label: 'max force', min: 0.005, max: 1, step: 0.005, log: true,
+    hint: 'Measured (noise field): force 0.02 cannot keep up (alignment with the field 0.48, speed 55% of max); 0.12 follows well (0.96); 1 snaps onto the field (0.999).',
+  },
+  {
+    key: 'followerLookahead', label: 'look-ahead (steps)', min: 0, max: 40, step: 1,
+    hint: 'Measured (noise field): 10 steps lifts alignment a little (0.96 to 0.974); 30 steps hurts it (0.82) and slows followers to 66% of max speed, because they read the field too far away to matter.',
+  },
+  {
+    key: 'followerRespawn', label: 'follower respawn', min: 0, max: 0.05, step: 0.0005,
+    hint: 'Draft: chance per step that a follower jumps to a random place, at rest. Keeps followers from gathering only along the field sinks.',
+  },
+  {
+    key: 'followerDeposit', label: 'follower trail', min: 0.002, max: 0.5, step: 0.002, log: true,
+    hint: 'How much trail one follower leaves. It is the followers\' share of the shared picture.',
+  },
+
+  // ---- the flow field itself ----
+  {
+    key: 'fieldKind', label: 'field kind', min: 0, max: 1, step: 1, group: 'Flow field',
+    options: [
+      { value: 0, text: 'noise angle' },
+      { value: 1, text: 'curl noise' },
+    ],
+    hint: 'Seen: noise angle gathers followers into a few bright rivers (alignment 0.96); curl keeps them spread over vortices (alignment 0.974). Curl is incompressible, so a dense swarm averages into grain: use fewer followers and a slower trail decay to see strokes.',
+  },
+  {
+    key: 'fieldFrequency', label: 'noise frequency', min: 0.5, max: 20, step: 0.1, log: true,
+    hint: 'Measured (curl field): turning per step 0.8, 1.5 and 2.5 degrees at 1.5, 3 and 8 features per screen height; alignment with the field 0.99, 0.97, 0.88.',
+  },
+  {
+    key: 'fieldEvolution', label: 'field drift (per s)', min: 0, max: 1, step: 0.01,
+    hint: 'Measured (curl field): 0 freezes the field and leaves 14% of followers stalled at stagnation points; 0.08 is best aligned (0.974); 0.8 lowers alignment to 0.91.',
+  },
+  {
+    key: 'fieldQuantSteps', label: 'angle steps', min: 0, max: 16, step: 1,
+    hint: 'Seen: 0 keeps directions smooth. n snaps every direction to a multiple of 360/n degrees; 4 gives right-angle streams, like a circuit board.',
+  },
+  {
+    key: 'fieldStrength', label: 'field strength', min: 0, max: 1, step: 0.05,
+    hint: 'Measured: mean follower speed is proportional to it: 0.24, 0.47, 0.92 of max speed at 0.25, 0.5, 1. At 0 they have nothing to follow and coast to a stop.',
+  },
+  {
+    key: 'penFieldMode', label: 'pen edits field', min: 0, max: 3, step: 1,
+    options: [
+      { value: 0, text: 'nothing' },
+      { value: 1, text: 'swirl' },
+      { value: 2, text: 'attract' },
+      { value: 3, text: 'repel' },
+    ],
+    hint: 'Measured against a nearly uniform field: swirl raises circulation around the pen from 0.23 to 0.87; attract drives followers inward (radial motion -0.83); repel empties the pen (followers inside 15.5k to 9k) with a mild outward drift (+0.26). The drag direction (stir) also bends the field near the pen.',
+  },
+  {
+    key: 'penFieldStrength', label: 'pen edit strength', min: 0, max: 1, step: 0.05,
+    hint: 'Measured (swirl): circulation around the pen 0.36 at 0.3 and 0.87 at 0.9.',
   },
 ];
