@@ -53,3 +53,9 @@ So an embedded player keeps playing while the audience sees only the artwork. Ve
 
 **Service worker: stale-while-revalidate for same-origin GETs, plus a precache handshake, production builds only.**
 The first page load happens before the worker controls the page, so its requests are never seen by the fetch handler. After registering, the page therefore sends the worker the list of same-origin files it loaded (`performance.getEntriesByType('resource')`) and the worker caches them, so the very next load can be offline. Cache matching uses `ignoreVary: true`: servers send `Vary: Origin`, module scripts carry an Origin header that the `cache.add` copies do not, and without this the JS and CSS never matched (found by testing, see LOGBOOK.md). Consequence: after a redeploy, the first reload still shows the old version and the next one shows the new one. Cross-origin requests (Spotify, YouTube, direct links) are never touched. Not registered in dev, where it would fight hot reload.
+
+## 2026-09-29, follow-up from Kiwi
+
+- Player visibility: Kiwi judged it inconsequential, so the panel (and any embedded player) keeps fading with P. No change made.
+- CLAUDE.md is left untouched, at Kiwi's request. The embed exception is recorded only here.
+- Spotify sign-in did not prompt inside the Claude app's built-in browser. Treated as a limit of that pane until tested in regular Chrome (ESCALATIONS.md item 4). No code change.
