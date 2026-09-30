@@ -6,7 +6,6 @@ Open questions for Kiwi. Newest last. Work continues on other tasks while these 
 
 1. **Language of LOGBOOK.md and SCORE_TEMPLATE.md.** SPEC section 11 says headings are bilingual (English with Spanish in parentheses) until you say otherwise. Default: bilingual. Confirm or choose one language.
 2. **Song brief.** No SONG_BRIEF.md exists yet. Until it does, only engine milestones and PLACEHOLDER scenes are built (SPEC 8.9.9).
-3. **Spotify embed sign-in (still open, needs a test in a normal browser).** Kiwi reports the embed does not prompt for sign-in inside the Claude app's built-in browser. Likely cause (unverified): that pane restricts the popup Spotify uses for login. Next step for Kiwi: run `npm run dev`, open http://localhost:5173 in regular Chrome, sign in to open.spotify.com in that same profile first, then paste a track link. If full tracks still do not play there, the fallback is the Web Playback SDK (needs a Spotify developer app, Client ID and redirect URI).
 
 ## Resolved
 

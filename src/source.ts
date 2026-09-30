@@ -3,26 +3,26 @@
 //
 // Only http(s) URLs are ever accepted as direct audio. Anything else (javascript:, data:,
 // file:) is rejected, because the string ends up in an element's src.
+//
+// Spotify is recognised only to give a helpful message: its embedded player could not be
+// made to play full tracks reliably, so it was removed (DECISIONS.md, 2026-09-30).
 
 export type Source =
-  | { kind: 'spotify'; uri: string } // "spotify:track:<id>", the form the embed API wants
   | { kind: 'youtube'; id: string }
   | { kind: 'url'; url: string } // direct link to an audio file
   | { kind: 'invalid'; reason: string };
 
-const SPOTIFY_TYPES = 'track|album|playlist|episode|show|artist';
-const SPOTIFY_ID = '[A-Za-z0-9]{22}';
-const SPOTIFY_WEB = new RegExp(`^/(?:intl-[a-z-]+/)?(${SPOTIFY_TYPES})/(${SPOTIFY_ID})(?:/|$)`);
-const SPOTIFY_URI = new RegExp(`^spotify:(${SPOTIFY_TYPES}):(${SPOTIFY_ID})$`);
 const YOUTUBE_ID = /^[\w-]{11}$/;
 const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com']);
+
+const SPOTIFY_UNSUPPORTED =
+  'Spotify links are not supported. Use a local file, a YouTube link or a direct audio link.';
 
 export function parseSource(input: string): Source {
   const text = input.trim();
   if (!text) return { kind: 'invalid', reason: 'Paste a link first.' };
 
-  const uri = SPOTIFY_URI.exec(text);
-  if (uri) return { kind: 'spotify', uri: `spotify:${uri[1]}:${uri[2]}` };
+  if (/^spotify:/i.test(text)) return { kind: 'invalid', reason: SPOTIFY_UNSUPPORTED };
 
   let url: URL;
   try {
@@ -36,11 +36,7 @@ export function parseSource(input: string): Source {
 
   const host = url.hostname.toLowerCase();
 
-  if (host === 'open.spotify.com') {
-    const m = SPOTIFY_WEB.exec(url.pathname);
-    if (m) return { kind: 'spotify', uri: `spotify:${m[1]}:${m[2]}` };
-    return { kind: 'invalid', reason: 'That Spotify link is not a track, album, playlist, episode or show.' };
-  }
+  if (host === 'open.spotify.com') return { kind: 'invalid', reason: SPOTIFY_UNSUPPORTED };
 
   if (host === 'youtu.be') {
     const id = url.pathname.slice(1).split('/')[0];

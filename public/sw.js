@@ -6,7 +6,7 @@
 //   list of files it just loaded, and they are cached, so the very next load can be offline.
 // - After a redeploy, the first reload still shows the old version; the next one shows the
 //   new one. Hashed asset names keep old and new files from mixing.
-// - Cross-origin requests (Spotify, YouTube, direct audio links) are never touched here.
+// - Cross-origin requests (YouTube, direct audio links) are never touched here.
 const CACHE = 'instrumento-v1';
 
 self.addEventListener('install', () => self.skipWaiting());

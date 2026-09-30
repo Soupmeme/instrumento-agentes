@@ -1,24 +1,5 @@
-// Minimal typings for the two third-party player APIs we load on demand.
-// Only what audio.ts uses. Both scripts come from the vendors' own hosts and are loaded
-// only when the performer pastes a Spotify or YouTube link.
-
-interface SpotifyPlaybackUpdate {
-  data: { isPaused: boolean; isBuffering: boolean; duration: number; position: number }; // ms
-}
-
-interface SpotifyEmbedController {
-  addListener(event: 'ready', cb: () => void): void;
-  addListener(event: 'playback_update', cb: (e: SpotifyPlaybackUpdate) => void): void;
-  destroy(): void;
-}
-
-interface SpotifyIFrameAPI {
-  createController(
-    element: HTMLElement,
-    options: { uri: string; width?: string | number; height?: string | number },
-    callback: (controller: SpotifyEmbedController) => void,
-  ): void;
-}
+// Minimal typings for the YouTube IFrame API, which audio.ts loads on demand from
+// youtube.com only when the performer pastes a YouTube link.
 
 interface YouTubePlayer {
   getCurrentTime(): number;
@@ -37,7 +18,6 @@ interface YouTubePlayerOptions {
 }
 
 interface Window {
-  onSpotifyIframeApiReady?: (api: SpotifyIFrameAPI) => void;
   onYouTubeIframeAPIReady?: () => void;
   YT?: { Player: new (element: HTMLElement, options: YouTubePlayerOptions) => YouTubePlayer };
 }

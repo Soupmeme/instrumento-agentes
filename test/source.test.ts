@@ -5,28 +5,6 @@ import { parseSource } from '../src/source.ts';
 
 const ID22 = '4uLU6hMCjMI75M1A2tKUQC';
 
-test('spotify web links, with and without locale prefix and query', () => {
-  const want = { kind: 'spotify', uri: `spotify:track:${ID22}` };
-  assert.deepEqual(parseSource(`https://open.spotify.com/track/${ID22}`), want);
-  assert.deepEqual(parseSource(`https://open.spotify.com/track/${ID22}?si=abc123`), want);
-  assert.deepEqual(parseSource(`https://open.spotify.com/intl-es/track/${ID22}?si=x`), want);
-  assert.deepEqual(parseSource(`  https://open.spotify.com/track/${ID22}  `), want);
-});
-
-test('spotify uri form and other content types', () => {
-  assert.deepEqual(parseSource(`spotify:album:${ID22}`), { kind: 'spotify', uri: `spotify:album:${ID22}` });
-  assert.deepEqual(parseSource(`https://open.spotify.com/playlist/${ID22}`), {
-    kind: 'spotify',
-    uri: `spotify:playlist:${ID22}`,
-  });
-});
-
-test('spotify links that are not playable content are rejected', () => {
-  assert.equal(parseSource('https://open.spotify.com/').kind, 'invalid');
-  assert.equal(parseSource('https://open.spotify.com/track/short').kind, 'invalid');
-  assert.equal(parseSource('https://open.spotify.com/user/someone').kind, 'invalid');
-});
-
 test('youtube forms', () => {
   const want = { kind: 'youtube', id: 'dQw4w9WgXcQ' };
   assert.deepEqual(parseSource('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), want);
@@ -43,6 +21,18 @@ test('youtube links without a video id are rejected', () => {
   assert.equal(parseSource('https://youtu.be/').kind, 'invalid');
 });
 
+test('spotify links are rejected with a message that says so', () => {
+  for (const link of [
+    `https://open.spotify.com/track/${ID22}`,
+    `https://open.spotify.com/intl-es/track/${ID22}?si=x`,
+    `spotify:track:${ID22}`,
+  ]) {
+    const result = parseSource(link);
+    assert.equal(result.kind, 'invalid', link);
+    assert.match((result as { reason: string }).reason, /Spotify/, link);
+  }
+});
+
 test('direct audio urls pass through', () => {
   assert.deepEqual(parseSource('https://example.com/a/song.mp3'), { kind: 'url', url: 'https://example.com/a/song.mp3' });
   assert.equal(parseSource('http://example.com/x.wav').kind, 'url');
@@ -54,7 +44,7 @@ test('dangerous or empty input is rejected', () => {
   }
 });
 
-test('lookalike hosts are not treated as spotify or youtube', () => {
-  assert.equal(parseSource(`https://open.spotify.com.evil.test/track/${ID22}`).kind, 'url');
+test('lookalike hosts are not treated as youtube or spotify', () => {
   assert.equal(parseSource('https://notyoutube.com/watch?v=dQw4w9WgXcQ').kind, 'url');
+  assert.equal(parseSource(`https://open.spotify.com.evil.test/track/${ID22}`).kind, 'url');
 });

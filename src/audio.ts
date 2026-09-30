@@ -1,15 +1,15 @@
-// Song source: a local file, a direct audio link, or a Spotify / YouTube link.
+// Song source: a local file, a direct audio link, or a YouTube link.
 //
 // Hard rule (CLAUDE.md 2): nothing in the picture may ever be derived from the sound.
 // No AudioContext, no AnalyserNode, no FFT. For local files and direct links the element is
-// a plain HTMLAudioElement and we never read its samples. Spotify and YouTube play inside
-// their own iframes, which cannot be analysed from the page at all. Kiwi approved the
-// embeds on 2026-09-29 (DECISIONS.md). The only thing this module exposes about playback is
+// a plain HTMLAudioElement and we never read its samples. YouTube plays inside its own
+// iframe, which cannot be analysed from the page at all. Kiwi approved the YouTube embed
+// on 2026-09-29 (DECISIONS.md). The only thing this module exposes about playback is
 // `elapsed`, a display-only clock for the cue panel (M6). It triggers nothing, ever.
 //
-// Online and offline: a local file needs no network. Everything else needs one, and the
-// vendor scripts are fetched only when a Spotify or YouTube link is pasted, so the app
-// itself never depends on them.
+// Online and offline: a local file needs no network. The other two do, and the YouTube script
+// is fetched only when a YouTube link is pasted, so the app itself never depends on it.
+// (A Spotify embed was tried and removed, see DECISIONS.md 2026-09-30.)
 
 import { parseSource, type Source } from './source';
 
@@ -52,20 +52,8 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
-// Each vendor script announces itself through a global callback, so the promise is created
+// The YouTube script announces itself through a global callback, so the promise is created
 // once and shared. It is cleared on failure so a later attempt (back online) can retry.
-let spotifyApi: Promise<SpotifyIFrameAPI> | null = null;
-function getSpotifyApi(): Promise<SpotifyIFrameAPI> {
-  spotifyApi ??= new Promise<SpotifyIFrameAPI>((resolve, reject) => {
-    window.onSpotifyIframeApiReady = resolve;
-    loadScript('https://open.spotify.com/embed/iframe-api/v1').catch((err) => {
-      spotifyApi = null;
-      reject(err);
-    });
-  });
-  return spotifyApi;
-}
-
 let youtubeApi: Promise<NonNullable<Window['YT']>> | null = null;
 function getYouTubeApi(): Promise<NonNullable<Window['YT']>> {
   youtubeApi ??= new Promise((resolve, reject) => {
@@ -118,8 +106,8 @@ export class Song {
       if (ev.key === 'Escape') els.linkInput.blur();
     });
 
-    // Live keys must always reach the page. A click inside a player (audio controls or a
-    // vendor iframe) would otherwise keep keyboard focus there and Space would stop working.
+    // Live keys must always reach the page. A click inside a player (audio controls or the
+    // YouTube iframe) would otherwise keep keyboard focus there and Space would stop working.
     els.audio.addEventListener('focus', () => els.audio.blur());
     window.addEventListener('blur', () => {
       setTimeout(() => {
@@ -208,15 +196,14 @@ export class Song {
       return;
     }
 
-    // Spotify and YouTube need the vendor script, so they need the internet.
+    // YouTube needs its vendor script, so it needs the internet.
     if (!navigator.onLine) {
-      this.setStatus('You are offline. Spotify and YouTube links need a connection; choose a local file instead.', true);
+      this.setStatus('You are offline. YouTube links need a connection; choose a local file instead.', true);
       return;
     }
     this.setStatus('Loading player...');
     try {
-      const backend =
-        source.kind === 'spotify' ? await this.loadSpotify(source.uri) : await this.loadYouTube(source.id);
+      const backend = await this.loadYouTube(source.id);
       if (id !== this.loadId) {
         backend.dispose(); // the performer moved on while this was loading
         return;
@@ -226,39 +213,8 @@ export class Song {
       if (id !== this.loadId) return;
       console.error('Player failed to load:', err);
       this.els.embedHost.replaceChildren();
-      this.setStatus(
-        `Could not load the ${source.kind === 'spotify' ? 'Spotify' : 'YouTube'} player (blocked or offline).`,
-        true,
-      );
+      this.setStatus('Could not load the YouTube player (blocked or offline).', true);
     }
-  }
-
-  private async loadSpotify(uri: string): Promise<Backend> {
-    const api = await getSpotifyApi();
-    const mount = document.createElement('div');
-    this.els.embedHost.replaceChildren(mount);
-
-    const controller = await new Promise<SpotifyEmbedController>((resolve) => {
-      api.createController(mount, { uri, width: '100%', height: 152 }, resolve);
-    });
-
-    // The embed reports position in ms a few times a second. Between reports we extrapolate,
-    // so the display clock does not visibly step.
-    let position = 0;
-    let paused = true;
-    let reportedAt = performance.now();
-    controller.addListener('playback_update', (e) => {
-      position = e.data.position / 1000;
-      paused = e.data.isPaused || e.data.isBuffering;
-      reportedAt = performance.now();
-    });
-
-    this.label = `Spotify ${uri}`;
-    this.setStatus('Spotify player ready. Sign in inside it for full tracks, then press play.');
-    return {
-      elapsed: () => (paused ? position : position + (performance.now() - reportedAt) / 1000),
-      dispose: () => controller.destroy(),
-    };
   }
 
   private async loadYouTube(videoId: string): Promise<Backend> {

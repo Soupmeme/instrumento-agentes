@@ -70,3 +70,11 @@ The local commits carried Kiwi's Gmail address, which would have been public in 
 
 **Clean-install check before deploying.**
 A dry run of the CI steps (`npm ci`, test, build) exposed a half-deleted `node_modules` caused by the dev server holding files open on Windows. Not a code problem, but stop the dev server before running `npm ci` locally.
+
+## 2026-09-30, Spotify removed (Kiwi's decision)
+
+**Spotify support removed. Song sources are now: local file, YouTube link, direct audio link.**
+The embedded Spotify player was tested by Kiwi in regular Chrome (not the built-in pane): clicking it opened a separate tab and the Spotify desktop app, the player never showed a sign-in and never played more than the 30 second preview. The alternative, the Web Playback SDK, needs a developer app, Client ID, OAuth redirect and Premium, and Kiwi chose not to take on that fiddling. This supersedes the Spotify parts of the 2026-09-29 song-sources entry above (the embed choice and its focus and P-fade notes still apply to YouTube). A pasted Spotify link is recognised only to show "Spotify links are not supported. Use a local file, a YouTube link or a direct audio link." Direct audio links were kept because they need no account or player and are one code path shared with local files; they can be dropped if Kiwi wants only files and YouTube. The YouTube embed remains the one approved exception to "plain audio element" (CLAUDE.md is unchanged, at Kiwi's request).
+
+**README.md added with the live GitHub Pages link as its first line after the title.**
+Covers what it is, status, requirements, song sources, current keys, how to run, deployment, documents and credits. Credits list the algorithms the project is built on and are marked as growing as each one is implemented.
