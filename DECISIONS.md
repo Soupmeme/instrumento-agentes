@@ -119,3 +119,8 @@ M1 needs live-adjustable parameters. The panel is built so M6 can extend it (sce
 
 **In-browser self-test (`__physarumSelfTest`, dev builds) instead of a headless GPU test.**
 Node has no WebGPU, and SPEC 10.4 says not to claim GPU tests ran without a real adapter. The self-test steps controlled agents on a hand-built trail and compares the GPU result with the CPU reference. It was mutation-checked: flipping one turn direction in the CPU reference made exactly the two left-turn cases fail.
+
+## 2026-09-30, service worker fix: network-first pages
+
+**Pages are now network-first (4 s timeout, cached copy as fallback); other same-origin files are cache-first with a background refresh under `event.waitUntil`. Cache renamed `instrumento-v2`.**
+This supersedes the stale-while-revalidate design in the 2026-09-29 service worker entry. Found after the M1 deploy: the live site kept serving the M0 build even after two reloads, because the background refresh was not wrapped in `event.waitUntil`, so the browser could stop the worker before the new page was stored. Alternatives: keep stale-while-revalidate and only add `waitUntil` (a deploy would still take one extra reload to show), or skip caching pages (loses offline). Network-first for the page means an online visit always gets the newest version, and the cache only matters offline or on a very slow connection. Hashed JS and CSS files never change content, so cache-first is safe for them. Users stuck on the old worker recover with one reload (tested, see LOGBOOK.md).

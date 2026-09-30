@@ -47,3 +47,11 @@ Experiments, decisions, tests and rehearsals, with dates. Kiwi writes scores and
 - SA observation, one seed (7), about 8 s after reset, 400k agents: 15 deg gave long, straighter filaments meeting at hubs with fewer closed cells; 45 deg a honeycomb of closed cells; 90 deg thick meandering labyrinth bands. This differs from my first draft prediction ("larger SA branches more"), so the draft was rewritten to the observation. Not verified by Kiwi, other seeds not checked.
 
 **Not verified:** the visual effect of SD, RA, MD, decay, deposit and respawn (only that the parameters reach the shader), behavior on other GPUs, long-run behavior (M8, for example whether the network collapses after minutes), and the look at resolutions other than 1043x914 and 1920x1080.
+
+## 2026-09-30, service worker bug found after the M1 deploy
+
+- After deploying M1, the live site still showed the M0 build (old script name, old placeholder text) after two reloads. Cause: the old worker refreshed its cache in the background without `event.waitUntil`, so the browser could stop it before the new page was saved. Anyone who had visited the site before (including Kiwi's browser) could be stuck on an old version.
+- Fix: pages are network-first, other files cache-first with a background refresh under `waitUntil`, cache renamed `instrumento-v2` (DECISIONS.md).
+- Tested locally on the same origin that still had the old worker registered (a faithful reproduction of the stuck state): the server served the new build but the page showed the old script; after one reload the new script loaded and the cache was `instrumento-v2`. Then the server was stopped (confirmed down with curl) and the page reloaded: the new build loaded from the cache, the network grew, GPU timings showed, 0 validation errors.
+- Note: in a background tab the browser pauses the animation loop, so the simulation does not advance until the tab is visible again (seen as a briefly noisy start after switching to the tab).
+- Not verified: the recovery on the real live site for a browser that already holds the old worker (checked after the push, see next entry if added).

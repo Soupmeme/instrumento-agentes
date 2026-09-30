@@ -1,13 +1,19 @@
-// Offline support. Stale-while-revalidate for same-origin GET requests: serve from cache
-// immediately if we have it, refresh the cache from the network in the background.
+// Offline support.
 //
-// Consequences worth knowing:
-// - The first visit must be online. Right after registering, the page sends this worker the
-//   list of files it just loaded, and they are cached, so the very next load can be offline.
-// - After a redeploy, the first reload still shows the old version; the next one shows the
-//   new one. Hashed asset names keep old and new files from mixing.
+// - Page loads (navigations) are NETWORK-FIRST: online, you always get the newest version;
+//   offline (or if the network takes longer than NAV_TIMEOUT_MS), the cached copy is used.
+// - Everything else on our own origin (hashed JS and CSS, images) is cache-first with a
+//   background refresh. Hashed file names never change content, so this is safe and fast.
 // - Cross-origin requests (YouTube, direct audio links) are never touched here.
-const CACHE = 'instrumento-v1';
+//
+// The first visit must be online. Right after registering, the page sends this worker the
+// list of files it just loaded and they are cached, so the very next load can be offline.
+//
+// History: the first version served pages stale-while-revalidate without event.waitUntil, so
+// the browser could stop the worker before the refresh finished and users stayed on an old
+// build. Bumping CACHE below discards those old entries.
+const CACHE = 'instrumento-v2';
+const NAV_TIMEOUT_MS = 4000;
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -20,24 +26,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// ignoreVary: we keep exactly one copy per URL. Servers send `Vary: Origin`, and module
+// scripts and stylesheets loaded with the crossorigin attribute carry an Origin header that
+// the copies stored by cache.add() do not, so without this they never match.
+const lookup = (cache, request) => cache.match(request, { ignoreVary: true });
+
+async function networkFirst(event, cache, request) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS);
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timer);
+    if (response.ok) event.waitUntil(cache.put(request, response.clone()));
+    return response;
+  } catch {
+    return (await lookup(cache, request)) ?? Response.error();
+  }
+}
+
+async function cacheFirst(event, cache, request) {
+  const cached = await lookup(cache, request);
+  const refresh = fetch(request)
+    .then((response) => {
+      if (response.ok) return cache.put(request, response.clone()).then(() => response);
+      return response;
+    })
+    .catch(() => undefined);
+  // waitUntil keeps the worker alive until the refresh is stored.
+  event.waitUntil(refresh);
+  return cached ?? (await refresh) ?? Response.error();
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      // ignoreVary: we keep exactly one copy per URL. Servers send `Vary: Origin`, and module
-      // scripts and stylesheets loaded with the crossorigin attribute carry an Origin header
-      // that the copies stored by cache.add() do not, so without this they never match.
-      const cached = await cache.match(request, { ignoreVary: true });
-      const refresh = fetch(request)
-        .then((response) => {
-          if (response.ok) cache.put(request, response.clone());
-          return response;
-        })
-        .catch(() => cached ?? Response.error());
-      return cached ?? refresh;
-    }),
+    caches
+      .open(CACHE)
+      .then((cache) =>
+        request.mode === 'navigate' ? networkFirst(event, cache, request) : cacheFirst(event, cache, request),
+      ),
   );
 });
 
