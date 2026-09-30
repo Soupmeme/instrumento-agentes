@@ -8,11 +8,16 @@
 //
 // How it computes its action: compare the three readings (F, L, R) and turn by RA toward the
 // higher one, then step forward by MD. Then it adds itself to the per-pixel counter.
+// With the flow -> Physarum coupling on it also perceives the flow field's direction at its own
+// position and is steered a little toward it after the turn.
 
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage, read_write> agents: array<Agent>;
 @group(0) @binding(2) var<storage, read> trail: array<f32>;
 @group(0) @binding(3) var<storage, read_write> counter: array<atomic<u32>>;
+@group(0) @binding(4) var<storage, read> field: array<vec2f>; // flow field, read when flowBias > 0
+
+fn fieldDims() -> vec2u { return vec2u(params.fieldW, params.fieldH); }
 
 // Trail value under a sensor placed SD pixels from `p` in direction `angle`.
 // Nearest pixel, no interpolation (as in the reference); the world wraps like a torus.
@@ -65,6 +70,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
     a.heading -= params.rotationAngle;
   }
   // (l == r and the middle is not an extreme: no preference, keep heading.)
+
+  // 2b. Coupling: the flow field bends the heading (steering, see flow_bias.wgsl). Off at weight 0.
+  a.heading = flowBiasedHeading(a.heading, params.moveDistance, p, size);
   a.heading = a.heading - TAU * floor(a.heading / TAU); // keep in [0, 2pi) so precision stays high
 
   // 3. Move, wrapping around the world.

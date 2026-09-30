@@ -4,8 +4,8 @@
 // What a boid perceives: the other boids within a radius, found through the spatial grid
 // (flock_grid.wgsl). For alignment and cohesion only those in front of it count (inside a view
 // cone centred on its velocity); separation sees all around (see flocking.ts for why). It reads their
-// positions and velocities, nothing else: no leader, no trail, no global information. The pointer
-// is the one exception, and only when the performer uses it.
+// positions and velocities, nothing else: no leader, no global information. The exceptions: the
+// shared trail, but only when the trail -> boids coupling is on, and the pointer, and only when the performer uses it.
 //
 // How it computes its action (Reynolds 1999, Nature of Code chapter 5). Three behaviours, each
 // a rule for choosing a DESIRED velocity, each turned into a steering force with the library's
@@ -31,6 +31,16 @@
 @group(0) @binding(5) var<storage, read_write> rank: array<u32>;
 @group(0) @binding(6) var<storage, read_write> sortedBoids: array<vec4f>; // boid states ordered by cell (flock_grid.wgsl)
 @group(0) @binding(7) var<storage, read_write> counter: array<atomic<u32>>;
+@group(0) @binding(8) var<storage, read_write> trail: array<f32>; // the shared trail, read for the trail -> boids coupling
+
+// Trail value at a position in pixels: nearest pixel, the world wraps.
+fn trailAt(q: vec2f) -> f32 {
+  let w = i32(flock.gridW);
+  let h = i32(flock.gridH);
+  let x = ((i32(floor(q.x)) % w) + w) % w;
+  let y = ((i32(floor(q.y)) % h) + h) % h;
+  return trail[u32(y) * flock.gridW + u32(x)];
+}
 
 const FIXED: f32 = 1024.0; // fixed-point scale of the neighbour sums (1/1024 pixel)
 
@@ -112,6 +122,21 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   if (nbrN > 0 && any(cohSum != vec2i(0))) {
     let toCentre = vec2f(cohSum) / FIXED / f32(nbrN);
     accel = accel + flock.cohWeight * steerToward(seekDesired(toCentre, flock.maxSpeed), vel, flock.maxForce);
+  }
+
+  // Coupling, trail -> boids: steer up the gradient of the shared trail (seek toward where the
+  // trail is thicker). The trail carries the marks of every family, so this is how the flock feels
+  // the Physarum veins, the followers' strokes and its own wake. One vector is perceived: the
+  // difference between the trail a little to the right and left, and below and above. A flat
+  // trail has no uphill, so the behaviour stays silent there.
+  if (flock.trailWeight > 0.0) {
+    let d = flock.trailSense;
+    let g = vec2f(
+      trailAt(pos + vec2f(d, 0.0)) - trailAt(pos - vec2f(d, 0.0)),
+      trailAt(pos + vec2f(0.0, d)) - trailAt(pos - vec2f(0.0, d)));
+    if (any(g != vec2f(0.0))) {
+      accel = accel + flock.trailWeight * steerToward(seekDesired(g, flock.maxSpeed), vel, flock.maxForce);
+    }
   }
 
   // The pointer: the same soft circle the Physarum pen uses (full weight at the pointer, 37% one

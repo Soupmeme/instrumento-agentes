@@ -3,10 +3,16 @@
 // Blur spreads each deposit into its neighbours, so a line of agents becomes a soft ridge
 // that agents can sense from a distance. Decay makes old paths fade. Together they set how
 // far and how long an agent's trace can influence the others. The world wraps like a torus.
+//
+// It also keeps a delayed copy of the trail (SPEC 5.1, the colour trick): delayed = 0.8 * now +
+// 0.2 * delayed. The display colours the difference between the trail and its delayed copy, so
+// places where the trail is growing or fading look different from stable ones. Each pixel only
+// reads and writes its own delayed value, so it is updated in place.
 
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage, read> trailIn: array<f32>;
 @group(0) @binding(2) var<storage, read_write> trailOut: array<f32>;
+@group(0) @binding(3) var<storage, read_write> delayed: array<f32>;
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
@@ -24,5 +30,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       sum += trailIn[u32(y) * params.width + u32(x)];
     }
   }
-  trailOut[gid.y * params.width + gid.x] = (sum / 9.0) * params.decay;
+  let idx = gid.y * params.width + gid.x;
+  let now = (sum / 9.0) * params.decay;
+  trailOut[idx] = now;
+  delayed[idx] = 0.8 * now + 0.2 * delayed[idx];
 }

@@ -7,7 +7,7 @@
 //      clamped to (0, 1]. It means "how much trail is here";
 //   2. at a distance that depends on S, the trail at three points ahead (left, middle, right).
 // It also feels, weakly, the pen (a region where another preset applies), waves passing
-// through, and the stir push. It does not see other agents, only their trail.
+// through, the stir push and, when the coupling is on, the direction of the flow field. It does not see other agents, only their trail.
 //
 // How it computes its action:
 //   - the 15-vector that describes its behaviour is a blend of the background preset and the
@@ -40,6 +40,9 @@ struct Ext {
 @group(0) @binding(3) var<storage, read_write> counter: array<atomic<u32>>;
 @group(0) @binding(4) var<uniform> ext: Ext;
 @group(0) @binding(5) var<storage, read_write> velocities: array<vec2f>;
+@group(0) @binding(6) var<storage, read> field: array<vec2f>; // flow field, read when flowBias > 0
+
+fn fieldDims() -> vec2u { return vec2u(params.fieldW, params.fieldH); }
 
 // Smooth value noise in 3 dimensions (x, y, time). Same construction as the reference: a
 // hash-based random number at each integer lattice point, smoothly interpolated. It gives the
@@ -179,6 +182,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   } else if (left < right) {
     heading += rotationAngle;
   }
+
+  // Coupling: the flow field bends the heading (steering, see flow_bias.wgsl). Off at weight 0.
+  heading = flowBiasedHeading(heading, moveDistance, p, size);
 
   // Stir: near the pen, a noisy push in the drag direction.
   let moveNoise = noise3(vec3f(noisePos, 0.8 * ext.time));

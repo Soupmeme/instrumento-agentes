@@ -26,6 +26,10 @@ import moveExtendedWgsl from './move_extended.wgsl?raw';
 import depositWgsl from './deposit.wgsl?raw';
 import diffuseWgsl from './diffuse.wgsl?raw';
 import displayWgsl from './display.wgsl?raw';
+import steeringWgsl from '../steering/steering.wgsl?raw';
+import fieldSampleWgsl from '../flow/field_sample.wgsl?raw';
+import flowBiasWgsl from '../coupling/flow_bias.wgsl?raw';
+import { paletteWgsl, PALETTE_COUNT } from '../render/palettes';
 import { FlowLayer, type FlowInput } from '../flow/flow';
 import { FlockLayer, MAX_BOIDS, type FlockInput } from '../flock/flock';
 
@@ -33,7 +37,9 @@ import { FlockLayer, MAX_BOIDS, type FlockInput } from '../flock/flock';
 export const MAX_AGENTS = 2_000_000;
 const AGENT_BYTES = 16; // vec2f pos, f32 heading, f32 progress
 const VELOCITY_BYTES = 8; // vec2f, used only by the extended mode (inertia)
-const PARAM_BYTES = 80;
+const PARAM_BYTES = 96;
+/** Edge darkening of the display (0 = none). A fixed, subtle value; see DECISIONS (M5). */
+const VIGNETTE = 0.15;
 const EXT_FLOATS = 64;
 const WORKGROUP = 256;
 const MAX_GRID_SIDE = 1920;
@@ -117,6 +123,8 @@ export class Physarum {
   private velocityBuf: GPUBuffer;
   private trail: GPUBuffer[] = [];
   private counter!: GPUBuffer;
+  /** The delayed trail (see diffuse.wgsl): where the trail has been changing shows up in the colour. */
+  private slow!: GPUBuffer;
 
   private initPipe: GPUComputePipeline;
   private movePipe: GPUComputePipeline;
@@ -192,12 +200,14 @@ export class Physarum {
         compute: { module: device.createShaderModule({ label, code: commonWgsl + code }), entryPoint: 'main' },
       });
     this.initPipe = compute('physarum init', initWgsl);
-    this.movePipe = compute('physarum move', moveWgsl);
-    this.moveExtPipe = compute('physarum move extended', moveExtendedWgsl);
+    // The two agent shaders also steer toward the flow field when the coupling is on.
+    const coupling = steeringWgsl + fieldSampleWgsl + flowBiasWgsl;
+    this.movePipe = compute('physarum move', coupling + moveWgsl);
+    this.moveExtPipe = compute('physarum move extended', coupling + moveExtendedWgsl);
     this.depositPipe = compute('physarum deposit', depositWgsl);
     this.diffusePipe = compute('physarum diffuse', diffuseWgsl);
 
-    const displayModule = device.createShaderModule({ label: 'physarum display', code: commonWgsl + displayWgsl });
+    const displayModule = device.createShaderModule({ label: 'physarum display', code: commonWgsl + paletteWgsl() + displayWgsl });
     this.displayPipe = device.createRenderPipeline({
       label: 'physarum display',
       layout: 'auto',
@@ -248,6 +258,10 @@ export class Physarum {
   get counterBuffer(): GPUBuffer {
     return this.counter;
   }
+  /** The delayed copy of the trail (display colour trick). */
+  get delayedBuffer(): GPUBuffer {
+    return this.slow;
+  }
   /** Simulation time in seconds (resets with Reset). */
   get simTime(): number {
     return this.frame / SIM_HZ;
@@ -262,6 +276,7 @@ export class Physarum {
     if (simWidth === this.width && simHeight === this.height) return;
     this.trail.forEach((b) => b.destroy());
     this.counter.destroy();
+    this.slow.destroy();
     this.allocateGrid(simWidth, simHeight);
   }
 
@@ -273,8 +288,9 @@ export class Physarum {
     const storage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC;
     this.trail = [0, 1].map((i) => device.createBuffer({ label: `physarum trail ${i}`, size: bytes, usage: storage }));
     this.counter = device.createBuffer({ label: 'physarum counter', size: bytes, usage: storage });
+    this.slow = device.createBuffer({ label: 'physarum delayed trail', size: bytes, usage: storage });
     this.flow.resize(w, h); // the flow layer's grid-sized buffers follow the grid
-    this.flock.resize(w, h);
+    this.flock.resize(w, h, this.trail as [GPUBuffer, GPUBuffer]);
     this.cur = 0;
 
     const entry = (binding: number, buffer: GPUBuffer): GPUBindGroupEntry => ({ binding, resource: { buffer } });
@@ -290,7 +306,7 @@ export class Physarum {
       this.moveBG.push(
         device.createBindGroup({
           layout: this.movePipe.getBindGroupLayout(0),
-          entries: [params, entry(1, this.agentsBuf), entry(2, here), entry(3, this.counter)],
+          entries: [params, entry(1, this.agentsBuf), entry(2, here), entry(3, this.counter), entry(4, this.flow.fieldBuffer)],
         }),
       );
       this.moveExtBG.push(
@@ -303,6 +319,7 @@ export class Physarum {
             entry(3, this.counter),
             entry(4, this.extBuf),
             entry(5, this.velocityBuf),
+            entry(6, this.flow.fieldBuffer),
           ],
         }),
       );
@@ -315,7 +332,7 @@ export class Physarum {
       this.diffuseBG.push(
         device.createBindGroup({
           layout: this.diffusePipe.getBindGroupLayout(0),
-          entries: [params, entry(1, here), entry(2, other)],
+          entries: [params, entry(1, here), entry(2, other), entry(3, this.slow)],
         }),
       );
       // After a step the newest trail sits in `other`, and `cur` flips to `1 - c`, so the
@@ -323,7 +340,7 @@ export class Physarum {
       this.displayBG.push(
         device.createBindGroup({
           layout: this.displayPipe.getBindGroupLayout(0),
-          entries: [params, entry(1, here)],
+          entries: [params, entry(1, here), entry(2, this.slow)],
         }),
       );
     }
@@ -338,6 +355,7 @@ export class Physarum {
 
     const enc = device.createCommandEncoder({ label: 'physarum reset' });
     this.trail.forEach((b) => enc.clearBuffer(b));
+    enc.clearBuffer(this.slow);
     enc.clearBuffer(this.counter);
     enc.clearBuffer(this.velocityBuf);
     const pass = enc.beginComputePass({ label: 'physarum init' });
@@ -515,6 +533,12 @@ export class Physarum {
     f[15] = p.mode === MODE_EXTENDED && n > 0 ? countScaleFor(n, this.width, this.height) : 1;
     f[16] = p.followerDeposit;
     f[17] = p.boidDeposit;
+    u[18] = this.flow.fieldWidth;
+    u[19] = this.flow.fieldHeight;
+    f[20] = p.flowToPhysarum;
+    u[21] = Math.max(0, Math.min(PALETTE_COUNT - 1, Math.floor(p.palette)));
+    f[22] = p.changeColour;
+    f[23] = VIGNETTE;
     this.gpu.device.queue.writeBuffer(this.paramsBuf, 0, buf);
   }
 
@@ -548,7 +572,8 @@ export class Physarum {
     // followers) or shows it (the debug arrows).
     const physarumAgents = p.physarumOn ? Math.max(0, Math.floor(p.agentCount)) : 0;
     const followers = Math.max(0, Math.min(1_000_000, Math.floor(p.followerCount)));
-    const needField = followers > 0 || this.fieldArrows;
+    // The flow -> Physarum coupling reads the field too, so the field is also built for it.
+    const needField = followers > 0 || this.fieldArrows || (physarumAgents > 0 && p.flowToPhysarum > 0);
     if (needField) this.flow.writeUniform(this.flowInput());
     const boids = Math.max(0, Math.min(MAX_BOIDS, Math.floor(p.flockCount)));
     if (boids > 0) this.flock.writeUniform(this.flockInput());
@@ -587,7 +612,7 @@ export class Physarum {
 
     if (boids > 0) {
       const gridStamps = this.querySet ? { querySet: this.querySet, begin: 2 * PASS_FLOCK_GRID, end: 2 * PASS_FLOCK_GRID + 1 } : undefined;
-      this.flock.encodeStep(enc, boids, gridStamps, this.stamps(PASS_FLOCK));
+      this.flock.encodeStep(enc, boids, this.cur, gridStamps, this.stamps(PASS_FLOCK));
       ran[PASS_FLOCK_GRID] = true;
       ran[PASS_FLOCK] = true;
     }

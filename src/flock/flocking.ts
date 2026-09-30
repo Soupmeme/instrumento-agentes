@@ -28,6 +28,7 @@
 import {
   limitLength, seekDesired, steerToward, withLength, wrappedOffset, fleeDesired, type Vec2,
 } from '../steering/steering.ts';
+import { trailGradient } from '../coupling/coupling.ts';
 
 /**
  * Work guard. Every boid tests the boids in the 9 grid cells around it, so the cost of a step is
@@ -85,6 +86,12 @@ export interface FlockConfig {
   penSigma: number;
   penStrength: number;
   penActive: boolean;
+  /**
+   * Trail -> boids coupling (coupling.ts): a boid also steers up the gradient of the trail, with
+   * this weight. `at` reads one trail pixel; `sense` is the distance (pixels) between the two
+   * readings on each side. Absent or weight 0: boids do not perceive the trail.
+   */
+  trail?: { at: (ix: number, iy: number) => number; weight: number; sense: number };
 }
 
 export const PEN_NONE = 0;
@@ -190,6 +197,8 @@ export interface FlockForces {
   alignment: Vec2 | null;
   cohesion: Vec2 | null;
   pen: Vec2 | null;
+  /** Steering up the trail's gradient, before weighting (null when off or flat). */
+  trail: Vec2 | null;
   /** Neighbours counted for separation, and for alignment / cohesion. */
   sepCount: number;
   nbrCount: number;
@@ -258,12 +267,20 @@ export function flockForces(index: number, boids: readonly Boid[], others: Itera
     pen = [f[0] * cfg.penStrength * reach, f[1] * cfg.penStrength * reach];
   }
 
+  let trail: Vec2 | null = null;
+  if (cfg.trail && cfg.trail.weight > 0) {
+    const g = trailGradient(cfg.trail.at, me.pos, cfg.trail.sense, cfg.width, cfg.height);
+    // A flat trail has no uphill: stay silent rather than return a zero desired velocity.
+    if (g[0] !== 0 || g[1] !== 0) trail = steerToward(seekDesired(g, cfg.maxSpeed), me.vel, cfg.maxForce);
+  }
+
   let tx = 0, ty = 0;
+  if (trail && cfg.trail) { tx += trail[0] * cfg.trail.weight; ty += trail[1] * cfg.trail.weight; }
   if (separation) { tx += separation[0] * cfg.sepWeight; ty += separation[1] * cfg.sepWeight; }
   if (alignment) { tx += alignment[0] * cfg.aliWeight; ty += alignment[1] * cfg.aliWeight; }
   if (cohesion) { tx += cohesion[0] * cfg.cohWeight; ty += cohesion[1] * cfg.cohWeight; }
   if (pen) { tx += pen[0]; ty += pen[1]; }
-  return { separation, alignment, cohesion, pen, sepCount: sepN, nbrCount: nbrN, total: [tx, ty] };
+  return { separation, alignment, cohesion, pen, trail, sepCount: sepN, nbrCount: nbrN, total: [tx, ty] };
 }
 
 /** Apply the forces: velocity, speed limit, move, wrap. The same lines as every steering agent. */

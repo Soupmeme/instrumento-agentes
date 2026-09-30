@@ -1,6 +1,6 @@
 // Shared by every Physarum shader (prepended as text, WGSL has no includes).
 
-// Mirrors the uniform buffer written by Physarum.writeParams. All scalars, 16 fields = 64 bytes.
+// Mirrors the uniform buffer written by Physarum.writeParams. All scalars, 24 fields = 96 bytes.
 struct Params {
   width: u32,          // simulation grid size in pixels
   height: u32,
@@ -20,8 +20,12 @@ struct Params {
   countScale: f32,     // deposit density compensation (1 in classic mode, see extended.ts)
   followerDeposit: f32, // trail left per follower (sqrt of the follower count in a pixel times this)
   boidDeposit: f32,     // trail left per boid (same role as followerDeposit)
-  pad2: f32,
-  pad3: f32,
+  fieldW: u32,          // flow field cells (the Physarum agents read the field when flowBias > 0)
+  fieldH: u32,
+  flowBias: f32,        // flow -> Physarum coupling weight, 0..1 (see coupling.ts)
+  palette: u32,         // colour palette index (display only)
+  changeGain: f32,      // how strongly growing or fading trail tints the colour (display only)
+  vignette: f32,        // edge darkening, 0 = none (display only)
 }
 
 // One agent. pos is NORMALISED (0..1 across the world) so the simulation grid can be resized

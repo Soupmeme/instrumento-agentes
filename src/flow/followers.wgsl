@@ -14,6 +14,8 @@
 // The field says WHICH WAY to go; the steering rule decides HOW the agent gets there. A low
 // maxForce makes it turn wide and lazily, a high one makes it snap onto the field.
 //
+// (The field sampling functions are in field_sample.wgsl, shared with the Physarum agents.)
+//
 // Then it adds itself to its own per-pixel counter. The deposit pass turns that counter into
 // trail with its own weight, so followers draw into the same material as the Physarum agents.
 
@@ -22,27 +24,7 @@
 @group(0) @binding(2) var<storage, read> field: array<vec2f>;
 @group(0) @binding(3) var<storage, read_write> counter: array<atomic<u32>>;
 
-fn cellAt(x: i32, y: i32) -> vec2f {
-  let w = i32(flow.fieldW);
-  let h = i32(flow.fieldH);
-  let xi = ((x % w) + w) % w;
-  let yi = ((y % h) + h) % h;
-  return field[u32(yi) * flow.fieldW + u32(xi)];
-}
-
-// Field vector at a normalised position, interpolated between the four nearest cells. Vector
-// interpolation (not angle interpolation) has no wrap-around problem at 0 / 2pi. The world wraps.
-fn fieldAt(n: vec2f) -> vec2f {
-  let cells = vec2f(f32(flow.fieldW), f32(flow.fieldH));
-  let g = (n - floor(n)) * cells - 0.5;
-  let b = floor(g);
-  let f = g - b;
-  let x0 = i32(b.x);
-  let y0 = i32(b.y);
-  let top = mix(cellAt(x0, y0), cellAt(x0 + 1, y0), f.x);
-  let bottom = mix(cellAt(x0, y0 + 1), cellAt(x0 + 1, y0 + 1), f.x);
-  return mix(top, bottom, f.y);
-}
+fn fieldDims() -> vec2u { return vec2u(flow.fieldW, flow.fieldH); }
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg: vec3u) {

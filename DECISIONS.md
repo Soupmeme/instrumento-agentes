@@ -294,3 +294,65 @@ The first budget (100 million) gave 222 boids per cell at 50,000 boids, just bel
 
 **Test method: the guard check proves the guard engaged.**
 "The sampled step is close to the exact one" alone would also pass if the cap were ignored, so the check also runs the same case without the guard and requires the forced-cap run to differ more (3.0e-3 against 3.5e-4 mean velocity difference). The setup is alignment only with a narrow range of headings: separation in a balanced crowd is a tiny leftover of large pushes, so a sample of it cannot be compared boid by boid (a first version of the check failed for that reason: mean difference 0.16, which is what independent random directions give).
+
+## 2026-09-30, M5 coupling and coherence
+
+Predictions and metrics were written before measuring (see "Predictions and metrics" below), following the workflow habits agreed after M4.
+
+### Predictions and metrics
+
+Metrics (measured with `__exp.couplingStats`, seeds 7, 8, 9, 900 steps after a reset, 1043 x 910 grid):
+- Flow alignment of Physarum: mean cosine between an agent's heading and the field direction at its position.
+- Network health: closed cells, coverage, agents in crowded pixels (existing trail analysis).
+- Boid enrichment: mean trail under the boids divided by the mean trail over the world.
+- Flock health: nearest-neighbour distance, fullest grid cell (existing flock analysis).
+- Family share: each family's contribution to the trail energy per step (sum over pixels of sqrt(min(count * scale, 100)) * weight), as a fraction of the total.
+- GPU time per step and in the worst state.
+
+Predictions:
+1. flow -> Physarum, alignment: about 0 at weight 0 (between -0.03 and 0.03); 0.1 to 0.3 at 0.25; 0.4 to 0.8 at 1 (the agent's own trail-following turn pushes back). Stronger with curl than with noise angle only if the field is smoother there; I expect no large difference.
+2. flow -> Physarum, structure: closed cells fall as the weight rises (veins straighten into streams along the field), coverage roughly unchanged. With the noise-angle field (which has sinks) at weight 1, agents concentrate onto a few lines: the share of agents in crowded pixels rises clearly. Agent pass time rises by less than 30%.
+3. trail -> boids, enrichment: about 1 to 1.5 at weight 0 (no perception of the trail); at least 2 at weight 1; rising with the weight. Hazard: at weight 2 or more boids pile onto veins and their own wake, nearest-neighbour distance falls below 2 px; the work guard bounds the cost.
+4. Family share: with equal per-agent deposit weights the Physarum family dominates the extended mode (above 85% of the trail energy with 1M agents against 60k followers and 20k boids). Balanced defaults need a larger boid and follower weight there.
+5. Delayed-trail colour: growing trail glows in the palette's accent and fading trail darkens; with the coupling on, flocks crossing veins should be visible as bright moving accents. Judged by eye.
+
+### Decisions
+
+**Two coupling channels change how agents move; the third ("who writes the trail") needed no new code.**
+SPEC 6 lists three channels. (1) Flow -> Physarum: new. (2) Boids write to the trail and sense its gradient: the writing already existed (boid trail weight), the sensing is new (trail -> boids). (3) The pen as the shared intervention: already built across the three families (same soft circle and wheel). Physarum agents already sense follower and boid marks because all families write one trail; the deposit weights ("deposit", "follower trail", "boid trail") are that channel's live scalars. Each new channel has one live scalar: "flow steers Physarum" (0 to 1) and "trail attracts boids" (0 to 2). Both are off (0) by default, so every earlier result stays valid.
+
+**Flow -> Physarum is steering, using the library's one line, applied after the agent's own trail-based turn.**
+The agent's velocity is its heading times its step length; the field gives a desired velocity of the same length; `steer = limit(desired - velocity, weight * FLOW_FORCE * stepLength)`, and the new heading is the direction of velocity plus steer (speed stays constant, as for every Physarum agent). Alternatives: add a fixed angle toward the field (not steering, and it needs an arbitrary sign rule), or bias the sensor readings (changes what the agent perceives, but then the flow's strength depends on the trail). Both Physarum shaders (classic and extended) and both CPU references use it, and a zero field is silent (it does not brake). A property worth knowing: steering works on the difference between desired and current velocity, so an agent heading straight against the field is mostly slowed, not turned, and a constant-speed agent ignores that; the flow bends agents that are sideways to it.
+
+**FLOW_FORCE is 0.25 step lengths (about 14 degrees per step at weight 1), after a first value of 0.5 overshot.**
+With 0.5 the measured alignment was 0.92 at weight 1 and the network collapsed (3 closed cells with a noise-angle field, 84% of agents in crowded pixels) while 0.25 already gave 0.35 to 0.5. The prediction had been 0.4 to 0.8 at weight 1. The reason: the flow pulls the same way every step, while the trail's turns alternate left and right, so a pull that looks small next to a 45 degree turn wins. The constant was halved so that the slider's 0 to 1 spans "no effect" to "strongly aligned" instead of reaching collapse before the top. This is tuning a range to a target after a wrong prediction, not a confirmed prediction; the table in EXPLAINER.md says so.
+
+**Trail -> boids is steering up the trail gradient, sensed at 8 pixels, silent on a flat trail.**
+The boid reads the trail at four points (8 px right, left, below, above; nearest pixel, wrapping) and takes the two differences as a gradient; desired velocity is toward it at max speed; the force is limited to maxForce and weighted like every flock behavior. Alternatives: sense a wider neighbourhood (more reads), use the trail value only (no direction). One vector is all a boid perceives of the trail. The flock pass now binds the trail buffer, which brings it to 8 storage buffers, the default limit per shader stage; a further coupling in that pass (flow -> boids, SPEC 6 lists it only as optional) would need a buffer merge, so it was not built.
+
+**The trail -> boids response has a cliff, so the slider stops at 2 and the hint gives the safe range.**
+Measured (20k boids, 400k Physarum agents, 3 seeds): the trail under boids against the world average is 1.3 at 0, 1.5 at 1, 1.9 at 1.25, 2.9 at 1.5, then 9 at 1.75 and 19 at 2 (boids locked onto veins, 0.6 px spacing, up to 2000 in one grid cell). Boids climb a trail they also write, which is positive feedback. A smoother response would need a saturating function of the gradient or excluding the boids' own marks; neither was done (the second needs a separate trail channel). The cost of the collapsed state is bounded by the work guard (4.8 ms for 50,000 boids, 3.9 ms for 150,000).
+
+**The delayed trail is updated in place in the diffuse pass, and is not blurred.**
+The reference (SPEC 5.1) blurs the delayed copy like the trail. Each pixel only needs its own delayed value (`delayed = 0.8 * now + 0.2 * delayed`), so one extra buffer and one extra read and write per pixel, in place. A blurred copy needs a ping-pong pair. The visual difference is small because the trail itself is already blurred each step.
+
+**Display: one tone curve, one of six palettes, a change tint, a fixed faint vignette.**
+Every family is drawn through the same steps because all families write one trail: tone `tanh(gain * trail)`, palette lookup, then the change tint. The palettes are data in `src/render/palettes.ts` (Abyss, Ember, Orchid, Verdigris, Bone, Tide), which also generates the WGSL constants, so the shader and the tests read the same numbers. Rules, checked by unit tests: each starts at the page background, luminance rises at every stop, colours stay within one or two hue families. Palette keys are not assigned: the live vocabulary belongs to M6 (scenes carry a palette); for now it is a dropdown in the tuning panel.
+
+**Change tint: growing trail glows in the palette's accent, fading trail darkens, scaled by 25 and weighted toward the mid-tones.**
+Two changes came from looking. The first version scaled the change signal by 5, which was almost invisible (measured: after the tone gain the change is typically 0.01 to 0.03, so the scale became 25). Then it added grit on bright veins (a darkening or tint on a saturated pixel reads as noise), so both effects are weighted by `4 v (1 - v)`, strongest in the mid-tones where the palette has its colour.
+
+**Families are drawn by splatting into the shared trail, not as separate soft quads (SPEC 7 asked to decide by testing).**
+By construction splatting gives every family the same blur, palette, tone curve and decay: there is no second layer to match. Quads would need a separate draw, blending and matching of the trail's blur, for an orientation cue that the picture does not need. Checked by eye on calm, dense and mid-transition states (see LOGBOOK): boids and followers read as bead-like stipple inside the same medium. The cost is that families are not separately identifiable; that is the point of "one image". Kiwi owns the final judgement.
+
+**No bloom or other post pass; a fixed vignette of 0.15 only.**
+SPEC 7 allows one lightweight post pass "only if it improves coherence". The images already read as one medium, bloom would cost a pass and blur the stipple, and a vignette costs nothing inside the display shader. It is fixed, not a control, because it is not something a performer should touch.
+
+**Default boid trail weight raised about threefold (0.05 to 0.15 classic, 0.02 to 0.06 extended).**
+Prediction 4 said Physarum would hold more than 85% of the trail energy; it held 63 to 79% and the boids only 6.5 to 13%. After raising the boid weight the shares with all three families on are Physarum 50 to 69%, followers 13 to 22%, boids 17 to 31%. Energy share is a proxy (the tone curve saturates); the real test was the coherence screenshots, and those were taken with the new weights. These are starting values; scenes (M6) set the mix.
+
+**The Params uniform grew from 80 to 96 bytes (field cells, flow weight, palette, change gain, vignette).**
+The field cell count is needed by the Physarum shaders now. The field sampling functions moved to a shared `field_sample.wgsl` used by the followers and the two Physarum shaders, so there is one definition.
+
+**Test method: two mutation checks with predicted failures.**
+(A) The shader's flow force halved: predicted that the three flow -> Physarum heading checks fail (classic weight 1 and 0.35, extended) and the weight-0, strength-0, trail -> boids, delayed-trail and all-on checks pass. Observed exactly that. (B) The CPU reference's gradient y sign flipped: predicted that only the two trail -> boids checks fail. Observed exactly that. The served code was checked each time. A side finding: the existing work-guard check's "guard must be engaged" margin (5x) was tight enough to fail when the flock shader gained code; it was loosened to 3x.

@@ -13,6 +13,8 @@
 //      CPU steering rule using the GPU's own field as data (so it isolates the steering and the
 //      interpolation from the noise); plus counter sum, no NaN, speed cap and determinism.
 //   7. Flock: grid, boid step and health checks (see src/flock/selftest_flock.ts).
+//   8. Coupling: flow -> Physarum (classic and extended), trail -> boids, the delayed trail, and
+//      everything on at once (see src/coupling/selftest_coupling.ts).
 //   5. Extended mode (36 Points rule): controlled agents on a hand-built trail are stepped once
 //      by move_extended.wgsl and compared with the CPU reference (extended.ts), for the
 //      background preset, for the pen preset (pen exactly on the agent), for trail-dependent
@@ -29,6 +31,7 @@ import { extendedValues, mixVectors, pixelScaleFor, stepAgentExtended } from './
 import { MODE_CLASSIC, MODE_EXTENDED, modeDefaults } from './params';
 import { presetOfSlot } from './presets';
 import { flockChecks } from '../flock/selftest_flock';
+import { couplingChecks } from '../coupling/selftest_coupling';
 import { fieldVector, stepFollower, KIND_NOISE_ANGLE, KIND_CURL, PEN_NONE, PEN_SWIRL, type FieldConfig, type FollowerConfig } from '../flow/flowfield.ts';
 
 export interface SelfTestResult {
@@ -189,6 +192,9 @@ async function runChecks(p: Physarum): Promise<SelfTestResult> {
 
   // ---- 7. Flock ----
   checks.push(...(await flockChecks(p)));
+
+  // ---- 8. Coupling and the delayed trail ----
+  checks.push(...(await couplingChecks(p)));
 
   // Leave the instrument as we found it, with a fresh random start.
   Object.assign(p.params, saved);

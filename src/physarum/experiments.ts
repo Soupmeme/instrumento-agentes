@@ -9,6 +9,7 @@
 //   exact()                    exact (bit-level) checks of the "does not change the simulation" claims
 //   soak(cfg)                  accelerated long run with periodic health checks (background job)
 //   monitor(seconds)           watch the real-time frame loop and GPU timings (background job)
+//   couplingStats(set, opts)   flow alignment, enrichment, family shares; couplingSweep(key, values, set): one parameter
 //   flockStats(set, opts)      measure a flock (order, spacing, flocks); flockBench(counts, set): GPU time per pass
 // Background jobs report through window.__job and window.__mon.
 
@@ -17,6 +18,7 @@ import { DEFAULT_PARAMS, MODE_EXTENDED, modeDefaults, type PhysarumParams } from
 import { rowOfSlot } from './presets';
 import { sampleField } from '../flow/flowfield.ts';
 import { flockStats, flockBench, flockSoak, flockSweep } from '../flock/experiments_flock';
+import { couplingStats, couplingSweep } from '../coupling/experiments_coupling';
 
 const TAU = Math.PI * 2;
 
@@ -1217,6 +1219,8 @@ export function installExperiments(p: Physarum): void {
     flockBench: (counts: number[], set?: Partial<PhysarumParams>, o?: Parameters<typeof flockBench>[3]) => flockBench(p, counts, set, o),
     flockSoak: (set?: Partial<PhysarumParams>, o?: Parameters<typeof flockSoak>[2]) => flockSoak(p, set, o),
     flockSweep: (k: keyof PhysarumParams, v: number[], set?: Partial<PhysarumParams>, o?: Parameters<typeof flockSweep>[4]) => flockSweep(p, k, v, set, o),
+    couplingStats: (set?: Partial<PhysarumParams>, o?: Parameters<typeof couplingStats>[3]) => couplingStats(p, analyzeTrail, set, o),
+    couplingSweep: (k: keyof PhysarumParams, v: number[], set?: Partial<PhysarumParams>, o?: Parameters<typeof couplingSweep>[5]) => couplingSweep(p, analyzeTrail, k, v, set, o),
     hideSheet,
   };
 }

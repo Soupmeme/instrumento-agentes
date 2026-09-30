@@ -11,6 +11,8 @@
 // move faster or slower than agents in empty space.
 
 import { wrap, type AgentState } from './reference.ts';
+import { flowBiasedHeading } from '../coupling/coupling.ts';
+import type { Vec2 } from '../steering/steering.ts';
 
 /** exp(-d^2 / sigma^2): 1 at the pen, falling to 0. d and sigma in screen-height units. */
 export function penMix(distance: number, sigma: number, active = true): number {
@@ -65,6 +67,9 @@ export interface ExtendedContext {
   background: ArrayLike<number>;
   pen: ArrayLike<number>;
   penWeight: number;
+  /** Flow -> Physarum coupling (coupling.ts): weight 0..1 and the field vector at a pixel position. */
+  flowBias?: number;
+  flowVector?: (x: number, y: number) => Vec2;
 }
 
 const clampS = (x: number) => Math.min(1, Math.max(1e-9, x));
@@ -102,6 +107,8 @@ export function stepAgentExtended(
   } else if (left < right) {
     heading += values.rotationAngle;
   }
+  // The flow bends the heading after the trail has had its say (only when the coupling is on).
+  if (c.flowBias && c.flowVector) heading = flowBiasedHeading(heading, values.moveDistance, c.flowVector(a.x, a.y), c.flowBias);
   heading = wrap(heading, Math.PI * 2);
 
   return {

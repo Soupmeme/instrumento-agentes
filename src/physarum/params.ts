@@ -92,6 +92,14 @@ export interface PhysarumParams {
   respawnRate: number;
   /** Display only: brightness gain before the tone curve. Does not change the simulation. */
   displayGain: number;
+  /** Coupling, flow -> Physarum: how strongly the flow field steers Physarum agents (0 off, 1 about 14 degrees per step at most). */
+  flowToPhysarum: number;
+  /** Coupling, trail -> boids: weight of the boids' steering up the trail's gradient (0 off). */
+  trailToBoids: number;
+  /** Display only: colour palette index (see render/palettes.ts). */
+  palette: number;
+  /** Display only: how strongly growing or fading trail tints the colour, 0..1. */
+  changeColour: number;
 }
 
 export const DEFAULT_PARAMS: Readonly<PhysarumParams> = {
@@ -119,7 +127,7 @@ export const DEFAULT_PARAMS: Readonly<PhysarumParams> = {
   flockFov: (270 * Math.PI) / 180,
   flockPenMode: 2,
   flockPenStrength: 4,
-  boidDeposit: 0.05,
+  boidDeposit: 0.15,
   fieldKind: 0,
   fieldFrequency: 3,
   fieldEvolution: 0.08,
@@ -136,6 +144,10 @@ export const DEFAULT_PARAMS: Readonly<PhysarumParams> = {
   depositFactor: 0.05,
   respawnRate: 0.001,
   displayGain: 6,
+  flowToPhysarum: 0,
+  trailToBoids: 0,
+  palette: 0,
+  changeColour: 0.5,
 };
 
 /**
@@ -150,8 +162,8 @@ export function modeDefaults(
   mode: number,
 ): Pick<PhysarumParams, 'decay' | 'depositFactor' | 'displayGain' | 'respawnRate' | 'agentCount' | 'followerDeposit' | 'boidDeposit'> {
   return mode === MODE_EXTENDED
-    ? { decay: 0.75, depositFactor: 0.003, displayGain: 30, respawnRate: 0.001, agentCount: 1_000_000, followerDeposit: 0.02, boidDeposit: 0.02 }
-    : { decay: 0.9, depositFactor: 0.05, displayGain: 6, respawnRate: 0.001, agentCount: 400_000, followerDeposit: 0.05, boidDeposit: 0.05 };
+    ? { decay: 0.75, depositFactor: 0.003, displayGain: 30, respawnRate: 0.001, agentCount: 1_000_000, followerDeposit: 0.02, boidDeposit: 0.06 }
+    : { decay: 0.9, depositFactor: 0.05, displayGain: 6, respawnRate: 0.001, agentCount: 400_000, followerDeposit: 0.05, boidDeposit: 0.15 };
 }
 
 export const FIELD_NOISE_ANGLE = 0;
@@ -324,7 +336,7 @@ export const PARAM_SPECS: readonly ParamSpec[] = [
   },
   {
     key: 'boidDeposit', label: 'boid trail', min: 0.002, max: 0.5, step: 0.002, log: true,
-    hint: 'How much trail one boid leaves. It is the share of the flock in the shared picture.',
+    hint: 'How much trail one boid leaves. Measured trail-energy shares with all three families on (default weights): boids 17 to 31%, followers 13 to 22%, Physarum 50 to 69% (400k to 1M Physarum agents, 60k to 100k followers, 20k to 40k boids). Raising it also lowers the trail -> boids cliff.',
   },
 
   // ---- the flow field itself ----
@@ -365,5 +377,36 @@ export const PARAM_SPECS: readonly ParamSpec[] = [
   {
     key: 'penFieldStrength', label: 'pen edit strength', min: 0, max: 1, step: 0.05,
     hint: 'Measured (swirl): circulation around the pen 0.36 at 0.3 and 0.87 at 0.9.',
+  },
+
+  // ---- coupling: who perceives whom (SPEC 6) ----
+  {
+    key: 'flowToPhysarum', label: 'flow steers Physarum', min: 0, max: 1, step: 0.05, group: 'Coupling',
+    hint: 'Measured (400k classic Physarum agents, 3 seeds, 15 s): alignment of agent headings with the field (0 unrelated, 1 along it) is 0.07 to 0.18 at 0.25, 0.35 to 0.51 at 0.5, 0.74 to 0.78 at 1. Closed network cells: 53 at 0 and 0.25, 23 to 29 at 0.5, 9 to 16 at 1; agents in crowded pixels rise from 37% to 68 to 75% (a noise-angle field, which has sinks, collapses more). Extended mode (1M agents, curl): alignment 0.55 at 0.5 and 0.86 at 1, cells 343, 80, 27. No measurable cost. The first force value overshot (alignment 0.92 at 1, network collapsed), so the range was halved.',
+  },
+  {
+    key: 'trailToBoids', label: 'trail attracts boids', min: 0, max: 2, step: 0.05,
+    hint: 'Measured (20k boids, 400k Physarum agents, boid trail 0.15, 3 seeds): the trail under the boids against the world average is 1.3 at 0, 1.5 at 1, 1.9 at 1.25, 2.9 at 1.5 (spacing 3.1 px, 69% of max speed), then a cliff: 9 at 1.75 and 19 at 2 (spacing 0.6 px, boids locked onto the veins, up to 2000 in one grid cell, network down to 8 cells). Boids climb a trail that they also write, so it tips over. Keep it below about 1.5.',
+  },
+  // The other coupling channels are the trail weights already in the family groups: "deposit"
+  // (Physarum), "follower trail" and "boid trail" set how much each family writes into the
+  // shared trail, which every family can sense.
+
+  // ---- look (display only) ----
+  {
+    key: 'palette', label: 'palette', min: 0, max: 5, step: 1, group: 'Look',
+    options: [
+      { value: 0, text: 'Abyss (blue, teal, cream)' },
+      { value: 1, text: 'Ember (red, orange)' },
+      { value: 2, text: 'Orchid (violet, pink)' },
+      { value: 3, text: 'Verdigris (green, gold)' },
+      { value: 4, text: 'Bone (monochrome)' },
+      { value: 5, text: 'Tide (blue, teal, amber)' },
+    ],
+    hint: 'One colour ramp for the whole picture: every family is drawn through the same palette. A discrete regime switch; scenes will pick it.',
+  },
+  {
+    key: 'changeColour', label: 'change colour', min: 0, max: 1, step: 0.05,
+    hint: 'Seen, not measured: tints the picture where the trail is growing (the accent colour of the palette) and darkens it where it is fading, using a delayed copy of the trail. Strongest in the mid-tones, so bright veins stay clean. 0 shows the trail only. Display only: the simulation is unchanged.',
   },
 ];

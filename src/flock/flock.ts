@@ -25,6 +25,7 @@ import flockGridWgsl from './flock_grid.wgsl?raw';
 import flockWgsl from './flock.wgsl?raw';
 import debugWgsl from './flock_debug.wgsl?raw';
 import { MAX_CELLS, cellCapFor, cosHalfFov, gridDims } from './flocking.ts';
+import { TRAIL_SENSE_PX } from '../coupling/coupling.ts';
 
 /** Boids allocated up front. `params.flockCount` of them are awake. 262144 x 16 B x 2 = 8 MB. */
 export const MAX_BOIDS = 262_144;
@@ -71,7 +72,7 @@ export class FlockLayer {
   private debugGridPipe: GPURenderPipeline;
   private debugBoidPipe: GPURenderPipeline;
   private debugBG: GPUBindGroup[] = [];
-  /** One bind group per value of `cur`, because the boid buffers swap roles. */
+  /** One bind group per (boid buffer in use, trail buffer in use), because both pairs swap roles. Index: boidCur * 2 + trailCur. */
   private bg: GPUBindGroup[] = [];
 
   constructor(gpu: Gpu) {
@@ -104,6 +105,7 @@ export class FlockLayer {
         entry(5, 'storage'), // ranks
         entry(6, 'storage'), // boid states ordered by cell
         entry(7, 'storage'), // per-pixel counter
+        entry(8, 'storage'), // the trail (trail -> boids coupling)
       ],
     });
     const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [this.layout] });
@@ -168,7 +170,7 @@ export class FlockLayer {
   }
 
   /** Rebuild the grid-sized buffers for a new simulation grid. */
-  resize(gridW: number, gridH: number): void {
+  resize(gridW: number, gridH: number, trail: readonly [GPUBuffer, GPUBuffer]): void {
     const { device } = this.gpu;
     this.counterBuf?.destroy();
     this.gridW = gridW;
@@ -177,9 +179,11 @@ export class FlockLayer {
     this.counterBuf = device.createBuffer({ label: 'boid counter', size: gridW * gridH * 4, usage: storage });
 
     const e = (binding: number, buffer: GPUBuffer): GPUBindGroupEntry => ({ binding, resource: { buffer } });
-    this.bg = [0, 1].map((c) =>
-      device.createBindGroup({
-        label: `flock bind group ${c}`,
+    this.bg = [0, 1, 2, 3].map((k) => {
+      const c = k >> 1; // which boid buffer is the current one
+      const t = k & 1; // which trail buffer is the newest
+      return device.createBindGroup({
+        label: `flock bind group ${c}/${t}`,
         layout: this.layout,
         entries: [
           e(0, this.flockBuf),
@@ -190,9 +194,10 @@ export class FlockLayer {
           e(5, this.rankBuf),
           e(6, this.sortedBuf),
           e(7, this.counterBuf),
+          e(8, trail[t]),
         ],
-      }),
-    );
+      });
+    });
     this.debugBG = [0, 1].map((c) => [
       device.createBindGroup({ layout: this.debugGridPipe.getBindGroupLayout(0), entries: [e(0, this.flockBuf), e(1, this.boids[c]), e(2, this.debugBuf)] }),
       device.createBindGroup({ layout: this.debugBoidPipe.getBindGroupLayout(0), entries: [e(0, this.flockBuf), e(1, this.boids[c]), e(2, this.debugBuf)] }),
@@ -206,7 +211,7 @@ export class FlockLayer {
     const enc = this.gpu.device.createCommandEncoder({ label: 'flock reset' });
     const pass = enc.beginComputePass({ label: 'flock init' });
     pass.setPipeline(this.initPipe);
-    pass.setBindGroup(0, this.bg[0]); // boids[0] is binding 1, the one the init shader fills
+    pass.setBindGroup(0, this.bg[0]); // boids[0] is binding 1, the one the init shader fills (the trail is not used)
     const groups = Math.ceil(MAX_BOIDS / WORKGROUP);
     const x = Math.min(groups, 65535);
     pass.dispatchWorkgroups(x, Math.ceil(groups / x));
@@ -245,6 +250,8 @@ export class FlockLayer {
     f[18] = p.penRadius;
     f[19] = i.pen.active ? 1 : 0;
     f[20] = p.flockPenStrength;
+    f[22] = p.trailToBoids;
+    f[23] = TRAIL_SENSE_PX;
     u[21] = this.cellCapOverride ?? cellCapFor(count);
     this.gpu.device.queue.writeBuffer(this.flockBuf, 0, buf);
   }
@@ -256,16 +263,18 @@ export class FlockLayer {
   }
 
   /**
-   * Encode the flock step: grid (count, scan, scatter) then the boid pass. `gridStamps` covers
+   * Encode the flock step: grid (count, scan, scatter) then the boid pass. `trailCur` is the index
+   * of the newest trail buffer (the boids sense it). `gridStamps` covers
    * the three grid passes together, `flockStamps` the boid pass.
    */
   encodeStep(
     enc: GPUCommandEncoder,
     count: number,
+    trailCur: number,
     gridStamps?: { querySet: GPUQuerySet; begin: number; end: number },
     flockStamps?: GPUComputePassTimestampWrites,
   ): void {
-    const bg = this.bg[this.cur];
+    const bg = this.bg[this.cur * 2 + trailCur];
     enc.clearBuffer(this.cellCountBuf, 0, this.cellsX * this.cellsY * 4);
 
     let pass = enc.beginComputePass({

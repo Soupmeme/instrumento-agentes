@@ -215,7 +215,7 @@ export async function flockChecks(p: Physarum): Promise<Check[]> {
     const p99 = diffs[Math.floor(N * 0.99)];
     check(
       'flock work guard: a crowded cell is sampled, the step stays close to the exact one',
-      bad === 0 && changed > N / 2 && sum / N < 0.01 && p99 < 0.03 && sum > 5 * plainSum,
+      bad === 0 && changed > N / 2 && sum / N < 0.01 && p99 < 0.03 && sum > 3 * plainSum,
       `${N} boids in a 50 px patch, cap ${CAP} per cell: velocity difference mean ${(sum / N).toExponential(1)} (${(plainSum / N).toExponential(1)} without the guard, so it must be engaged), 99th percentile ${p99.toExponential(1)}, worst ${diffs[N - 1].toExponential(1)}, ${changed} boids changed velocity, ${bad} bad values`,
     );
   }

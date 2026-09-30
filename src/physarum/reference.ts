@@ -7,6 +7,9 @@
 // the trail anywhere else). Limits: it senses one pixel per sensor (nearest pixel, no
 // interpolation), and it cannot turn by more than RA per step.
 
+import { flowBiasedHeading } from '../coupling/coupling.ts';
+import type { Vec2 } from '../steering/steering.ts';
+
 export interface AgentState {
   /** Position in simulation pixels, in [0, width) x [0, height). */
   x: number;
@@ -22,6 +25,9 @@ export interface StepParams {
   sensorAngle: number;
   rotationAngle: number;
   moveDistance: number;
+  /** Flow -> Physarum coupling (coupling.ts): weight 0..1 and the field vector at a pixel position. */
+  flowBias?: number;
+  flowVector?: (x: number, y: number) => Vec2;
 }
 
 /** Wrap a pixel coordinate into [0, size), also for negative values (the world is a torus). */
@@ -65,7 +71,10 @@ export function stepAgent(
   const r = read(a.heading - p.sensorAngle);
 
   const TAU = Math.PI * 2;
-  const heading = wrap(a.heading + turnDelta(f, l, r, p.rotationAngle, coin), TAU);
+  let turned = a.heading + turnDelta(f, l, r, p.rotationAngle, coin);
+  // The flow bends the heading after the trail has had its say (only when the coupling is on).
+  if (p.flowBias && p.flowVector) turned = flowBiasedHeading(turned, p.moveDistance, p.flowVector(a.x, a.y), p.flowBias);
+  const heading = wrap(turned, TAU);
   return {
     x: wrap(a.x + Math.cos(heading) * p.moveDistance, p.width),
     y: wrap(a.y + Math.sin(heading) * p.moveDistance, p.height),

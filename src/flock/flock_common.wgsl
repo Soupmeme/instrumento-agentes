@@ -24,8 +24,8 @@ struct Flock {
   penActive: f32,      // 1 when the pen exists
   penStrength: f32,    // weight of the pointer's force
   cellCap: u32,        // most boids of one grid cell that a boid examines (work guard, see flocking.ts)
-  pad1: f32,
-  pad2: f32,
+  trailWeight: f32,    // trail -> boids coupling: weight of the steering up the trail's gradient (0 off)
+  trailSense: f32,     // pixels between the two trail readings on each side of the boid
 }
 
 // Which grid cell a normalised position (0..1) falls in. The min() guards a position that

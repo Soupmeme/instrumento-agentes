@@ -1,6 +1,6 @@
 # EXPLAINER
 
-How each part of the instrument works, in terms you can defend out loud. One section per agent family: Physarum (sections 1 and 2), flow followers (3) and the flock (4). Coupling between the families is added with its milestone (M5).
+How each part of the instrument works, in terms you can defend out loud. One section per agent family: Physarum (sections 1 and 2), flow followers (3) and the flock (4); section 5 covers how they are coupled and drawn as one picture.
 
 **Status of the evidence:** "Measured" below means one run with seed 7 on the developer machine (one NVIDIA GPU), 900 steps (15 simulated seconds) after a reset unless stated. It is evidence, not proof, and Kiwi still verifies and owns the final wording of every prediction.
 
@@ -378,3 +378,86 @@ In a dev build (`npm run dev`), console:
 - `await __physarumSelfTest()` compares the GPU with the CPU references for all four families (49 checks, 14 of them for the flock).
 - `await __exp.flockStats({flockCohWeight: 1.5}, {count: 10000})` measures order, spacing and flock count for any setting. `__exp.flockSweep(key, values)` does it for several values (background job, poll `window.__flockSweep`). `__exp.flockBench([20000, 100000])` times the passes (open the HUD first, key D). `__exp.flockSoak({flockCount: 50000})` is the accelerated long run.
 - Press G to see the grid and what one boid perceives: white dot = the selected boid (boid 0), red = boids it avoids, green = boids it aligns with and steers toward, the green circle = its neighbour radius with the view cone edges, the red circle = its separation radius.
+
+---
+
+## 5. Coupling and one shared look
+
+Milestone M5. Code: `src/coupling/` (`coupling.ts` is the readable CPU definition of both channels; `flow_bias.wgsl` the Physarum side; the trail term is in `flock.wgsl`), `src/render/palettes.ts` (the colours, one source for the shader and the tests), `src/physarum/display.wgsl` (the display), the delayed trail in `diffuse.wgsl`. Controls: tuning panel (T), groups "Coupling" and "Look".
+
+**Evidence:** "Measured" means seeds 7, 8 and 9, 900 steps (15 simulated seconds) after a reset, one NVIDIA GPU, simulation grid 1043 x 910, curl field unless stated. Kiwi still verifies and owns the final wording. "Seen" means looked at in a screenshot, not measured.
+
+### The idea
+
+Three families live in one world and perceive each other only through shared fields. Coupling is the set of those perceptions, and every one has a live strength, because changing "how strongly does X perceive Y" is exactly the brief's intervention on perception.
+
+| Channel | What is perceived | Control | Code |
+|---|---|---|---|
+| Physarum, followers and boids write the trail | (they write) | "deposit", "follower trail", "boid trail" | deposit pass |
+| Physarum agents sense the trail | the marks of every family, because the trail is shared | (automatic) | move shaders |
+| Flow -> Physarum | the flow field's direction at the agent's position | "flow steers Physarum", 0 to 1 | `flow_bias.wgsl`, `flowBiasedHeading` |
+| Trail -> boids | the gradient of the trail at the boid's position | "trail attracts boids", 0 to 2 | `flock.wgsl`, `trailGradient` |
+| The pen acts on all three | the pointer | pen radius (wheel), pen modes | M2, M3, M4 |
+
+### Flow -> Physarum: how a Physarum agent now decides
+
+```
+(1) sense the trail at three points and turn by RA toward the higher side     (unchanged)
+(2) velocity = heading * stepLength; desired = fieldDirection * stepLength
+    steer    = limit(desired - velocity, weight * 0.25 * stepLength)          (the library's one line)
+    heading  = direction of (velocity + steer)                                (speed stays constant)
+(3) move
+```
+
+At weight 0 step (2) does nothing; a field of strength 0 or no field also does nothing (the agent is not asked to stop). The flow pulls the same way every step while the trail's turns alternate left and right, so even a small weight shows. Steering acts on the difference between desired and current velocity, so an agent heading straight against the field is mostly slowed (which a constant-speed agent ignores) and barely turned: the flow bends the veins that cross it.
+
+### Trail -> boids: how a boid now decides
+
+A fourth steering force is added to the three flocking forces: read the trail 8 px to the right and left and below and above, take the differences as a gradient (it points toward thicker trail), seek along it at max speed, limit to maxForce, multiply by the weight. A flat trail has no uphill, so the force is silent there. The trail holds the marks of every family, so this is how the flock feels the Physarum veins, the followers' strokes and its own wake.
+
+### The look: what makes it one picture
+
+| Step | What | Why |
+|---|---|---|
+| Families | All three write into the same trail, one blur, one decay | Nothing to match: there is no second layer to keep consistent |
+| Tone | `tanh(gain * trail)` | Bright cores saturate smoothly instead of clipping |
+| Palette | One of six colour ramps (Abyss, Ember, Orchid, Verdigris, Bone, Tide), 5 stops each | One colour system for the whole picture; a scene picks one. Each starts at the page background, brightens at every stop, and stays in one or two hue families |
+| Change tint | Growing trail adds the palette's accent colour, fading trail darkens | Uses a delayed copy of the trail (`delayed = 0.8 * now + 0.2 * delayed`): where the picture is changing looks different from where it is stable. Weighted toward the mid-tones |
+| Vignette | Corners 15% darker | Keeps the eye in the middle; costs nothing inside the display shader |
+
+The display pass changes nothing in the simulation.
+
+### Predicted versus measured
+
+Predictions were written before measuring (DECISIONS.md, M5). The hover text in the tuning panel repeats the measured version.
+
+| Item | Predicted | Measured | Verdict |
+|---|---|---|---|
+| Flow -> Physarum: alignment of headings with the field | About 0 at weight 0; 0.1 to 0.3 at 0.25; 0.4 to 0.8 at 1 | With the first force value (0.5 step lengths) alignment was 0.35 to 0.5 at weight 0.25 and 0.92 at 1, and the network collapsed. The range was halved (0.25). Final: -0.01 at 0, 0.07 to 0.18 at 0.25, 0.35 to 0.51 at 0.5, 0.74 to 0.78 at 1 | The first value was wrong by a factor of two; the final numbers fit the prediction because the range was tuned to it, not because it was confirmed. See below |
+| Flow -> Physarum: structure | Closed cells fall, coverage about unchanged, crowding rises (more with a noise-angle field) | Closed cells 53 at 0 and 0.25, 23 to 29 at 0.5, 9 to 16 at 1. Coverage falls too (0.12 to 0.05 to 0.08). Agents in crowded pixels 37% to 68% (curl) or 75% (noise angle) | Supported, except coverage, which also falls |
+| Flow -> Physarum, extended mode (1M agents, preset 21) | As above | Alignment 0.02, 0.55, 0.86 at weights 0, 0.5, 1; closed cells 343, 80, 27 | Supported |
+| Flow -> Physarum: cost | Under 30% more agent time | No measurable change in total GPU time (3.9 ms, 3.7 ms, 4.3 ms at weights 0, 0.5, 1 with 1M agents, 500k followers, 50k boids) | Supported |
+| Trail -> boids: how much trail the boids stand on (against the world average) | About 1 to 1.5 at 0; at least 2 at 1; collapse at 2 or more | 1.3 at 0, 1.5 at 1, 1.9 at 1.25, 2.9 at 1.5, then a cliff: 9 at 1.75, 19 at 2 (spacing 0.6 px, up to 2,000 boids in one grid cell) | Partly: the baseline and the collapse were right, but the effect at 1 was 1.5, not 2, and the transition is a cliff between 1.5 and 1.75 |
+| Family shares of trail energy | Physarum above 85% in the extended mode | Physarum 63 to 79%, followers 15 to 26%, boids 6.5 to 13% with the old weights; after raising the boid weight threefold: Physarum 50 to 69%, followers 13 to 22%, boids 17 to 31% | Wrong: Physarum agents pile into pixels and the square-root saturation trims their share |
+| Change tint | Growing trail glows, fading trail darkens, visible | Invisible at the first sensitivity (the change is typically 0.01 to 0.03 after the tone gain); visible at 25 times; then grit on bright veins until it was weighted toward the mid-tones | Needed two fixes found by looking |
+
+### Coherence test (SPEC 7)
+
+Screenshots of three states, all three families on, checked by eye: calm (classic Physarum, 6,000 to 12,000 boids, 30,000 to 60,000 followers, slow decay), dense (extended mode, 1M Physarum agents, 100,000 followers, 30,000 boids) and mid-transition (extended mode, eased between two presets with 80,000 followers and 25,000 boids). Seen: in all three the families read as one medium, with boids and followers as bead-like stipple inside the Physarum veins and stripes, in any of the six palettes. The judgement is the author's; Kiwi decides whether it passes.
+
+### Performance and stability (this machine only)
+
+| Test | Result |
+|---|---|
+| Total GPU time per step, extended mode with 1M Physarum agents, 500k followers, 50,000 boids | 3.9 ms with no coupling, 3.7 ms with flow -> Physarum 0.5, 4.3 ms at weight 1 (noise angle, the agents collapse onto the sinks), 4.9 ms with both couplings on (trail 1.5). Exactly 60 steps per second each time |
+| Worst case: trail -> boids 1.75 (the collapse), classic 400k Physarum + 200k followers | 50,000 boids 4.8 ms, 150,000 boids 3.9 ms (the work guard bounds it) |
+| Soak, 400k Physarum + 100k followers + 30,000 boids with both couplings on (0.3 and 1.0), 18,000 steps (5 simulated minutes, accelerated) | 0 NaN, 0 out-of-range, 0 boids above max speed, boid counter exact at all 10 checks. Flock statistics stable but drifting slightly denser: nearest neighbour 4.3 px at 1,800 steps and 3.6 at the end, fullest cell 135 to 238. Wall time per 100 steps 112 ms then 115 ms, worst batch 179 ms |
+| Live loop, 60 s, extended mode with 1M Physarum agents, 500k followers, 50,000 boids, both couplings on, simulated pointer circling, clicks, the pointer alternating predator and attractor and the palette changing every 5 s | Exactly 59 to 61 steps in every second (median 60), GPU total 4.3 ms median in the first quarter and 4.7 ms in the last, worst second 5.5 ms, worst frame interval 6.7 ms, JS heap 13 to 11 MB |
+
+### How to verify
+
+In a dev build (`npm run dev`), console:
+
+- `await __physarumSelfTest()` compares the GPU with the CPU references for every family and coupling (60 checks, 11 of them for M5).
+- `await __exp.couplingStats({flowToPhysarum: 0.5})` measures alignment with the field, crowding, closed cells, the trail under the boids and the family shares for any setting. `__exp.couplingSweep(key, values, set, opts)` does it for several values (background job, poll `window.__couplingSweep`).
+- `__physarum.params.palette = 3` (or the dropdown) switches the palette at once; `changeColour` 0 to 1 sets the tint.

@@ -14,6 +14,7 @@ import steeringWgsl from '../steering/steering.wgsl?raw';
 import flowCommonWgsl from './flow_common.wgsl?raw';
 import noiseWgsl from './noise.wgsl?raw';
 import fieldWgsl from './field.wgsl?raw';
+import fieldSampleWgsl from './field_sample.wgsl?raw';
 import followersWgsl from './followers.wgsl?raw';
 import followersInitWgsl from './followers_init.wgsl?raw';
 import arrowsWgsl from './arrows.wgsl?raw';
@@ -88,7 +89,7 @@ export class FlowLayer {
         compute: { module: device.createShaderModule({ label, code }), entryPoint: 'main' },
       });
     this.fieldPipe = compute('flow field', commonWgsl + noiseWgsl + flowCommonWgsl + fieldWgsl);
-    this.followPipe = compute('flow followers', commonWgsl + steeringWgsl + flowCommonWgsl + followersWgsl);
+    this.followPipe = compute('flow followers', commonWgsl + steeringWgsl + flowCommonWgsl + fieldSampleWgsl + followersWgsl);
     this.initPipe = compute('flow followers init', commonWgsl + flowCommonWgsl + followersInitWgsl);
 
     const arrowModule = device.createShaderModule({ label: 'flow arrows', code: arrowsWgsl });
