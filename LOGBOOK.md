@@ -55,3 +55,29 @@ Experiments, decisions, tests and rehearsals, with dates. Kiwi writes scores and
 - Tested locally on the same origin that still had the old worker registered (a faithful reproduction of the stuck state): the server served the new build but the page showed the old script; after one reload the new script loaded and the cache was `instrumento-v2`. Then the server was stopped (confirmed down with curl) and the page reloaded: the new build loaded from the cache, the network grew, GPU timings showed, 0 validation errors.
 - Note: in a background tab the browser pauses the animation loop, so the simulation does not advance until the tab is visible again (seen as a briefly noisy start after switching to the tab).
 - Not verified: the recovery on the real live site for a browser that already holds the old worker (checked after the push, see next entry if added).
+
+## 2026-09-30, M1 verification pass: sliders, soak tests, timing
+
+Everything below ran on one machine, one NVIDIA GPU (Lovelace), in Chrome inside the Claude desktop app, with seed 7 for the slider comparisons. It says nothing about other GPUs or browsers.
+
+**Slider predictions against measurements** (900 steps after reset, 400k agents unless stated; details and numbers in EXPLAINER.md):
+- Supported: agents, turn angle (RA), trail decay (strongest effect), respawn (over 100 simulated seconds).
+- Confirmed exactly: deposit and display gain. Display gain 2 versus 20 leaves the simulation bit-identical (0 of about 950k trail values and 0 of 400k agent values differ). Deposit 0.05 versus 0.1 versus 0.4 gives identical agent paths and, at x2, an exactly doubled trail.
+- Contradicted: small sensor distance (predicted a fine tangled texture, measured sparse thin curving lines with few closed cells) and large sensor angle (predicted more branching, measured thick meandering labyrinth bands).
+- Partly supported: move distance (finer at small MD, but 4 was not faster-changing than 1.5 by the 1-second correlation, even at 3000 steps).
+- Respawn 0 is the dramatic case: after 6000 steps (100 s) the view had one line left at the edge, cells fell from 31 to 9, and the share of agents in crowded pixels rose from 20% to 47%.
+
+**Soak tests, accelerated (steps as fast as the GPU allows, health check every few thousand steps):**
+- Default settings, 400k agents, 30,010 steps (8.3 simulated minutes): 0 NaN, 0 out-of-range agents, 0 bad headings, counter sum equal to the agent count at all 10 checks, minimum displacement exactly equal to the move distance (nothing stuck), measured respawn rate about 0.001, JS heap sawtooth 20 to 49 MB with no growth trend, GPU time per step 0.178 ms with -1.4% drift from the first to the last tenth.
+- 2M agents, 20,004 steps: 0 anomalies, 0.368 ms per step, -1.1% drift.
+- Extreme parameters (MD 6, SD 60, SA and RA 120 deg, decay 0.99, deposit 0.5, respawn 0) 15,003 steps: no numerical errors, but 68% of agents ended in pixels with 50 or more agents and only about 19k pixels were occupied (a degenerate clumped picture). Tiny settings (10k agents) 15,003 steps: no problems.
+- Found and fixed: 2 agents at exactly x = 1.0 in about 4 million samples (see DECISIONS.md). After the fix, none in about 12 million samples.
+
+**Live loop (real 60 Hz pacing, HUD open so GPU timestamps are read back):**
+- 400k agents, 300 seconds: exactly 60 steps in every second, frame interval median 3.3 ms, GPU total median 0.328 ms in both the first and the last quarter, worst single sample 1.18 ms, worst frame interval 10 ms once, JS heap 3.2 to 3.0 MB.
+- 2M agents at 1920x1080, 120 seconds: exactly 60 steps in every second, GPU total 1.64 to 2.11 ms per 10-second window (first quarter 2.03, last 1.97), worst sample 3.54 ms, against a 16.7 ms frame.
+- The same 2M at 1080p stepped at full speed cost 0.90 ms per step, about half of the live figure. Likely the GPU clocking down while idle between steps; not confirmed.
+
+**Seed check on the two contradicted predictions:** repeated with seeds 1, 2 and 3. Sensor distance 4 gave 19 to 24 closed cells at 5.3% coverage on every seed (against 51 to 66 cells at SD 16), and SD 48 gave 16% to 18% coverage. Sensor angle 15 deg had 61% of agents turning per step and 90 deg had 9% on every seed, with the fewest cells at both extremes. So these two findings are not artifacts of seed 7. The other sliders were compared on seed 7 only.
+
+**Not verified:** any GPU other than this one; runs longer than 8 simulated minutes at full speed or 5 real minutes live (the 20-minute run is M8); other seeds for the sliders other than SD and SA; the effect of window resizing or fullscreen during a long run; behavior with a background tab (the browser pauses the loop).

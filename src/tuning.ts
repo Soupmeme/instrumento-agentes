@@ -48,7 +48,7 @@ export function buildTuning(
   for (const spec of specs) {
     const row = document.createElement('label');
     row.className = 'tune-row';
-    row.title = `${spec.hint} (draft prediction, to be verified)`;
+    row.title = `${spec.hint} (one seed, developer machine; Kiwi to verify)`;
 
     const name = document.createElement('span');
     name.className = 'tune-name';

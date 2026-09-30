@@ -76,6 +76,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   let iy = min(u32(p.y), params.height - 1u);
   atomicAdd(&counter[iy * params.width + ix], 1u);
 
-  a.pos = p / size;
+  // p / size can round up to exactly 1.0 when p is within about 6e-5 px of the far edge
+  // (seen twice in 4 million samples). Keep positions strictly inside [0, 1) as documented.
+  // 0.99999994 is the largest f32 below 1.
+  a.pos = min(p / size, vec2f(0.99999994));
   agents[i] = a;
 }

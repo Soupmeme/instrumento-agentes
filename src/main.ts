@@ -81,6 +81,8 @@ function attachDevice(g: Gpu): void {
     dbg.__song = song;
     dbg.__physarum = physarum;
     dbg.__physarumSelfTest = () => runSelfTest(physarum!);
+    // Experiment harness (sweeps, soak tests). Loaded on demand so it never ships.
+    void import('./physarum/experiments').then((m) => m.installExperiments(physarum!));
   }
 
   // Validation errors must be visible, not silent: the smoke test in M7 reads this counter.
@@ -131,7 +133,8 @@ function frame(now: number): void {
   }
 
   // Fixed-step simulation (see STEPS_PER_SECOND).
-  stepAccumulator += dt;
+  if (physarum.paused) stepAccumulator = 0;
+  else stepAccumulator += dt;
   let steps = 0;
   while (stepAccumulator >= STEP_MS && steps < MAX_STEPS_PER_FRAME) {
     physarum.step();

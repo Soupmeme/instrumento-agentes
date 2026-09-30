@@ -124,3 +124,23 @@ Node has no WebGPU, and SPEC 10.4 says not to claim GPU tests ran without a real
 
 **Pages are now network-first (4 s timeout, cached copy as fallback); other same-origin files are cache-first with a background refresh under `event.waitUntil`. Cache renamed `instrumento-v2`.**
 This supersedes the stale-while-revalidate design in the 2026-09-29 service worker entry. Found after the M1 deploy: the live site kept serving the M0 build even after two reloads, because the background refresh was not wrapped in `event.waitUntil`, so the browser could stop the worker before the new page was stored. Alternatives: keep stale-while-revalidate and only add `waitUntil` (a deploy would still take one extra reload to show), or skip caching pages (loses offline). Network-first for the page means an online visit always gets the newest version, and the cache only matters offline or on a very slow connection. Hashed JS and CSS files never change content, so cache-first is safe for them. Users stuck on the old worker recover with one reload (tested, see LOGBOOK.md).
+
+## 2026-09-30, M1 verification pass (slider predictions, soak, timing)
+
+**A dev-only experiment harness (`src/physarum/experiments.ts`) instead of eyeballing sliders.**
+Alternatives: manual screenshots only. The harness runs each parameter value from the same seed, computes numbers (closed-cell count and size, vein coverage, turning per step, change over 1 s, agent pile-ups) and draws a contact sheet, so predictions are tested against measurements and can be rerun. It is loaded with a dynamic import inside `import.meta.env.DEV`, so it is not in the production bundle (checked: bundle size unchanged apart from three small lines). It reads buffers back and loops over pixels and agents, which CLAUDE.md allows only in test code; that is why it is isolated and never called by the app.
+
+**A `paused` flag on the simulation (frame loop takes no steps while it is set).**
+The harness needs the loop to stand still while it steps the simulation itself. The flag is the natural home for the Freeze key of milestone M6, so it was added to the class, not to the harness.
+
+**Positions are clamped to the largest float below 1 (`0.99999994`) in `move.wgsl`.**
+The soak test found 2 agents in about 4 million samples at exactly x = 1.0, because `p / size` rounds up when an agent is within about 6e-5 px of the far edge. The movement code already copes with it, but the documented range is [0, 1) and the self-test asserts it, so a rare flake was possible. After the clamp the same kind of soak found none in about 12 million samples at 2M agents. Self-test still 11 of 11.
+
+**Parameter ranges are not narrowed, known bad corners are documented instead.**
+Alternatives: clamp the sliders away from respawn 0 and the extreme corner. Scenes (M6) may legitimately want the "world decays" look of respawn 0, and the performer never touches raw sliders live anyway. EXPLAINER.md lists the corners (respawn 0 collapses the picture in about 100 s; extreme settings clump all agents).
+
+**Hints in the tuning panel now state measurements, and say where the first predictions were wrong.**
+SD (small SD does not give a fine tangle) and SA (larger SA does not branch more) were contradicted, so the draft text was replaced by what was measured. Kiwi still owns the final wording.
+
+**Performance is judged on the live loop, not on full-speed stepping.**
+Full-speed batches (0.90 ms per step for 2M agents at 1080p) were about half the cost of the live 60 Hz loop (1.6 to 2.1 ms) for the same work. Probable cause: the GPU idles between steps and clocks down (not confirmed). Headroom estimates therefore use the live numbers, with the timestamp quantisation (about 0.066 ms per pass) in mind. Full-speed wall-clock per batch is still the better drift detector, because it is not quantised.

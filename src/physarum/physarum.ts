@@ -53,6 +53,10 @@ export class Physarum {
   readonly timings: PassTimings = { agent: NaN, deposit: NaN, diffuse: NaN, render: NaN };
   /** Set by the HUD: only read timings back while someone is looking at them. */
   wantTimings = false;
+  /** While true the frame loop takes no simulation steps (Freeze, and the test harness). */
+  paused = false;
+  /** Steps taken since the page loaded (never reset, used by the soak monitor). */
+  totalSteps = 0;
 
   private gpu: Gpu;
   private width = 0;
@@ -306,7 +310,13 @@ export class Physarum {
     device.queue.submit([enc.finish()]);
     this.cur = 1 - this.cur; // the diffuse pass wrote the newest trail into the other buffer
     this.frame++;
+    this.totalSteps++;
     this.stepRanSinceResolve = true;
+  }
+
+  /** Resolves when the GPU has finished everything submitted so far. Tests and tools only. */
+  whenIdle(): Promise<void> {
+    return this.gpu.device.queue.onSubmittedWorkDone();
   }
 
   /** Draw the newest trail into `view`. Call afterSubmit() once the encoder was submitted. */
