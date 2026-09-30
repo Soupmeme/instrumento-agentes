@@ -59,3 +59,14 @@ The first page load happens before the worker controls the page, so its requests
 - Player visibility: Kiwi judged it inconsequential, so the panel (and any embedded player) keeps fading with P. No change made.
 - CLAUDE.md is left untouched, at Kiwi's request. The embed exception is recorded only here.
 - Spotify sign-in did not prompt inside the Claude app's built-in browser. Treated as a limit of that pane until tested in regular Chrome (ESCALATIONS.md item 4). No code change.
+
+## 2026-09-30, deployment (approved by Kiwi)
+
+**Public repo Soupmeme/instrumento-agentes, deployed to GitHub Pages by a GitHub Actions workflow.**
+Live at https://soupmeme.github.io/instrumento-agentes/. Alternatives: a `gh-pages` branch with prebuilt files (would commit build output), or a private repo (Pages needs a paid plan for that). The workflow runs `npm ci`, `npm test` and `npm run build` before publishing, so a type error or failing test blocks the deploy. The repo is public, so SPEC.md, CLAUDE.md and all docs are public too.
+
+**Commit author rewritten to the GitHub noreply address before the first push.**
+The local commits carried Kiwi's Gmail address, which would have been public in the history. Kiwi approved rewriting the three unpushed commits (content unchanged, only author and committer lines). Verified afterwards that the Gmail address appears in no commit and no file. Future commits use the noreply address, set in this repo's local git config.
+
+**Clean-install check before deploying.**
+A dry run of the CI steps (`npm ci`, test, build) exposed a half-deleted `node_modules` caused by the dev server holding files open on Windows. Not a code problem, but stop the dev server before running `npm ci` locally.
