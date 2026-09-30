@@ -94,6 +94,43 @@ kbd {
   color: var(--fg);
 }
 
+#tuning {
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  width: 320px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: rgba(10, 12, 20, 0.82);
+  border: 1px solid rgba(143, 180, 255, 0.25);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+}
+#tuning h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.tune-row {
+  display: grid;
+  grid-template-columns: 1fr 62px;
+  grid-template-areas: "name value" "slider slider";
+  gap: 0 8px;
+  margin-bottom: 6px;
+  cursor: help;
+}
+.tune-name { grid-area: name; color: var(--dim); }
+.tune-row output { grid-area: value; text-align: right; }
+.tune-row input[type="range"] { grid-area: slider; width: 100%; margin: 2px 0 0; accent-color: var(--accent); }
+.tune-buttons { display: flex; gap: 6px; margin-top: 8px; }
+.tune-buttons button {
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--dim);
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.tune-buttons button:hover { border-color: var(--accent); color: var(--accent); }
+
 #message {
   position: fixed;
   inset: 0;

@@ -78,3 +78,44 @@ The embedded Spotify player was tested by Kiwi in regular Chrome (not the built-
 
 **README.md added with the live GitHub Pages link as its first line after the title.**
 Covers what it is, status, requirements, song sources, current keys, how to run, deployment, documents and credits. Credits list the algorithms the project is built on and are marked as growing as each one is implemented.
+
+## 2026-09-30, M1 classic Physarum
+
+**Trail and counter are plain storage buffers, not textures.**
+Alternatives: `r32float` storage textures (SPEC 5.1 notes), `rgba16float`. `r32float` is not filterable without an extra feature and needs `textureLoad` anyway; half floats lose precision. A buffer has no format rules, any pass can read it, and the flow field and flock grid can use the same pattern later. The display pass does its own bilinear upsampling (4 reads). Cost: no hardware filtering, which the nearest-pixel sensing does not need.
+
+**Agent positions are stored normalised (0..1), converted to pixels inside the shader.**
+Alternative: pixel units. Normalised positions let the simulation grid be resized (fullscreen toggle, window resize) without touching or rescaling 2M agents. On resize the trail is cleared and agents keep their place.
+
+**Simulation grid follows the canvas, capped at 1920 px on the long side, aspect kept.**
+A 4K canvas would otherwise quadruple the per-pixel passes for little visible gain. The display pass upsamples bilinearly.
+
+**Fixed 60 Hz simulation step with an accumulator (max 2 steps per frame, backlog dropped).**
+Alternative: one step per screen refresh. That would make a 144 Hz monitor run the piece 2.4 times faster than a 60 Hz one, so the same tuning would look different on the presentation machine. Trade-off: if the machine cannot keep 60 steps per second, the simulation slows down instead of catching up.
+
+**Agent buffer holds 2,000,000 agents; `agentCount` wakes the first N.**
+Changing the count is a uniform change, not a reallocation, so it can be a live slider. 32 MB is small next to the adapter limits we request.
+
+**Seeding on the GPU (`init.wgsl`).**
+CLAUDE.md forbids CPU per-agent loops. Reset reuses the same pass.
+
+**Trail update split into a deposit pass and a diffuse pass, ping-pong buffers.**
+Alternative: fuse them (blur is linear, so one pass could read the counts of the 3x3 neighbourhood). Fusing saves a dispatch but doubles the counter reads and hides the two ideas (deposit, then diffuse and decay) that must be explained in the defense. The two passes cost about 0.3 ms together at 1080p, so clarity wins.
+
+**Respawn kept, default 0.001 per step (about every 1000 steps).**
+SPEC 5.1 lists respawn in the reference pipeline, not in the classic rule. It is one extra line and a live control. Setting it to 0 gives the pure classic behavior.
+
+**Defaults that differ from the SPEC reference: decay 0.9 (reference 0.75), depositFactor 0.05 (reference 0.003), 400k agents.**
+The reference numbers belong to Bleuje's setup: about 6 agents per pixel at 1280x736, where the sqrt saturation and a 0.75 decay give crisp filaments. We start with roughly 0.4 agents per pixel, so trails must live longer to connect (0.9) and each deposit must count for more (0.05). Sensing only compares values, so deposit mostly changes brightness. These are starting points tuned by eye, not final scene values.
+
+**Turn rule tie handling.**
+SPEC 5.1 leaves ties open. Implemented: F strictly highest keeps heading; F lower than both picks a random side; otherwise turn toward the higher side; when L equals R and the middle is not an extreme, keep heading. Unit tested in `test/physarum.test.ts`.
+
+**GPU timing through timestamp queries, read back only while the HUD is open.**
+The pane runs uncapped (about 300 fps), so fps says nothing about headroom. Timestamps give per-pass GPU time. The read-back (`mapAsync` on a 64 byte buffer, at most once per step) is a debugging cost paid only with the HUD visible, so the normal frame path has no read-back. Chrome quantises timestamps (values come in steps of about 0.066 ms), so small numbers are rough.
+
+**A temporary tuning panel on T, sliders generated from a parameter list (`params.ts`).**
+M1 needs live-adjustable parameters. The panel is built so M6 can extend it (scene capture, JSON) rather than replace it. It is not part of the live vocabulary: sliders release keyboard focus after each drag so the live keys keep working.
+
+**In-browser self-test (`__physarumSelfTest`, dev builds) instead of a headless GPU test.**
+Node has no WebGPU, and SPEC 10.4 says not to claim GPU tests ran without a real adapter. The self-test steps controlled agents on a hand-built trail and compares the GPU result with the CPU reference. It was mutation-checked: flipping one turn direction in the CPU reference made exactly the two left-turn cases fail.

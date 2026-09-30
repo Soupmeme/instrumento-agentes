@@ -8,7 +8,7 @@ The performer drives every change by hand. There is no audio analysis, no beat d
 
 ## Status
 
-Early. Milestone M0 (scaffold) is done and the song player works. The simulation itself starts with milestone M1 (classic Physarum). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
+Early. Milestones M0 (scaffold, song player) and M1 (classic Physarum on the GPU) are done: hundreds of thousands of agents grow a live slime-mold network that you can tune with sliders. Flow fields, steering, flocking, the pen and the scene system come next (M2 to M6). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
 
 ## Requirements
 
@@ -33,6 +33,8 @@ Once the site has been opened online one time, it reloads with no connection (a 
 | Enter | Toggle fullscreen |
 | D | Toggle the debug HUD (fps, frame time, GPU adapter) |
 | P | Show or hide the setup panel (it fades, so an embedded player keeps playing) |
+| T | Show or hide the tuning panel (sliders for the Physarum parameters; hover a slider for its predicted effect) |
+| R | Reset: agents scatter and the trail clears |
 
 The live performance controls (pen, wheel, click, stir, scene keys) arrive with milestone M6.
 
@@ -56,6 +58,7 @@ Pushing to `main` runs `.github/workflows/deploy.yml`, which installs, tests, bu
 ## Documents
 
 - [SPEC.md](SPEC.md): what is being built and why.
+- [EXPLAINER.md](EXPLAINER.md): how each agent family works, what it perceives and how it decides, with draft predictions.
 - [DECISIONS.md](DECISIONS.md): every autonomous design decision, with alternatives and reasons.
 - [ESCALATIONS.md](ESCALATIONS.md): open questions for the performer.
 - [LOGBOOK.md](LOGBOOK.md): dated record of experiments and tests.

@@ -30,3 +30,20 @@ Experiments, decisions, tests and rehearsals, with dates. Kiwi writes scores and
 - Kiwi tested the Spotify embed in regular Chrome: no sign-in prompt, a separate tab and the desktop app opened, only the 30 second preview played. Spotify support was removed (see DECISIONS.md). Local files, YouTube and direct links remain.
 - Re-checked in the browser after the change: a pasted Spotify link now shows the "not supported" message and creates no player; a YouTube link still loads, plays after a click, its display clock advanced (3.39 s to 5.40 s over 2 s) and keyboard focus returned to the page. Unit tests: 6 pass (the parser tests for Spotify now assert rejection).
 - Added README.md with the live site link at the top.
+
+## 2026-09-30, M1 classic Physarum
+
+**Built:** agent, deposit and diffuse compute passes with an atomic counter, a display pass, a fixed-step loop, GPU timestamp timing, a tuning panel (T), Reset (R), a CPU reference (`reference.ts`) and an in-browser GPU self-test.
+
+**Tested on a real WebGPU adapter** (Chrome in the Claude desktop app, NVIDIA Lovelace, timestamp-query available). Nothing here was run on any other GPU.
+
+- First run failed: the move shader did not compile ("mixing '*' and '^' requires parenthesis"). Found by compiling each shader in isolation and reading `getCompilationInfo`. Fixed; all five shaders compile with no messages.
+- Picture: a recognizable Physarum network (bright veins around dark cells) within seconds. 0 validation errors, no console errors on a fresh tab.
+- Self-test, 11 of 11 pass: six controlled agent cases match the CPU reference (heading error at most 4e-8 rad, position error at most 6e-5 px), the counter sums to exactly the awake agents (100000 of 100000), no NaN, positions and headings in range, the trail is finite and non-negative, and the same seed gives identical agents (0 of 400000 values differ).
+- Mutation check: with the CPU reference deliberately broken (left turn negated), the self-test failed exactly the two left-turn cases (heading error 1 rad). Reference restored afterwards.
+- CPU unit tests: 8 tests of the turn rule, sensing geometry, moving and wrapping (14 tests in total with the link parser).
+- Performance, GPU time per step from timestamps (coarse, about 0.066 ms steps): at 1043x914 with 400k agents the agent pass took about 0.2 ms. At 1920x1080 with 400k agents, agents plus deposit plus diffuse plus display took about 0.9 ms. With 1M agents the agent pass took about 2.0 ms, with 2M about 2.9 ms (about 3.4 ms for everything). The 60 fps budget is 16.7 ms. Acceptance asked for 200k agents at 60 fps, and this machine has a large margin. This says nothing about weaker GPUs.
+- Live parameters: every slider changed its parameter (agents, SD, SA, RA, MD, decay, deposit, respawn, display gain) and Defaults restored all of them. Visually confirmed only for SA.
+- SA observation, one seed (7), about 8 s after reset, 400k agents: 15 deg gave long, straighter filaments meeting at hubs with fewer closed cells; 45 deg a honeycomb of closed cells; 90 deg thick meandering labyrinth bands. This differs from my first draft prediction ("larger SA branches more"), so the draft was rewritten to the observation. Not verified by Kiwi, other seeds not checked.
+
+**Not verified:** the visual effect of SD, RA, MD, decay, deposit and respawn (only that the parameters reach the shader), behavior on other GPUs, long-run behavior (M8, for example whether the network collapses after minutes), and the look at resolutions other than 1043x914 and 1920x1080.
