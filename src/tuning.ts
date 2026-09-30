@@ -3,7 +3,11 @@
 // performance the performer never touches raw parameters (SPEC 8.1). This is the seed of the
 // hidden tuning panel of milestone M6.
 
-import type { ParamSpec, PhysarumParams } from './physarum/params';
+import {
+  MODE_CLASSIC, MODE_EXTENDED, resetToDefaults, setMode, type ParamSpec, type PhysarumParams,
+} from './physarum/params';
+import { CURATED_SLOTS, SLOT_COUNT, slotLabel } from './physarum/presets';
+import type { Physarum } from './physarum/physarum';
 
 const RAD = Math.PI / 180;
 const STEPS = 1000; // slider resolution
@@ -28,7 +32,7 @@ function decimals(step: number): number {
 }
 
 export interface Tuning {
-  /** Push the current parameter values into the sliders (after Defaults or a scene change). */
+  /** Push the current parameter values into the controls (after a reset, or a wheel change). */
   refresh(): void;
 }
 
@@ -36,15 +40,89 @@ export function buildTuning(
   container: HTMLElement,
   params: PhysarumParams,
   specs: readonly ParamSpec[],
-  defaults: Readonly<PhysarumParams>,
-  onReset: () => void,
+  getPhysarum: () => Physarum | null,
 ): Tuning {
   const refreshers: (() => void)[] = [];
+  const rows: { row: HTMLElement; only?: 'classic' | 'extended' }[] = [];
+  const extendedOnly: HTMLElement[] = [];
 
   const title = document.createElement('h2');
   title.textContent = 'Physarum tuning';
   container.appendChild(title);
 
+  const applyVisibility = () => {
+    const extended = params.mode === MODE_EXTENDED;
+    for (const { row, only } of rows) row.hidden = only === 'classic' ? extended : only === 'extended' ? !extended : false;
+    extendedOnly.forEach((el) => (el.hidden = !extended));
+  };
+
+  const button = (parent: HTMLElement, text: string, fn: () => void, title?: string) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    if (title) b.title = title;
+    b.addEventListener('click', () => {
+      fn();
+      b.blur(); // a focused button would swallow the live keys
+    });
+    parent.appendChild(b);
+    return b;
+  };
+
+  const select = (label: string, options: { value: number; text: string }[], get: () => number, set: (v: number) => void, hint: string) => {
+    const row = document.createElement('label');
+    row.className = 'tune-row tune-select';
+    row.title = hint;
+    const name = document.createElement('span');
+    name.className = 'tune-name';
+    name.textContent = label;
+    const sel = document.createElement('select');
+    for (const o of options) {
+      const opt = document.createElement('option');
+      opt.value = String(o.value);
+      opt.textContent = o.text;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener('change', () => {
+      set(Number(sel.value));
+      sel.blur();
+    });
+    row.append(name, sel);
+    container.appendChild(row);
+    refreshers.push(() => (sel.value = String(get())));
+    sel.value = String(get());
+    return row;
+  };
+
+  // ---- mode ----
+  select(
+    'agent rule',
+    [
+      { value: MODE_CLASSIC, text: 'classic (4 sliders)' },
+      { value: MODE_EXTENDED, text: 'extended (36 points presets)' },
+    ],
+    () => params.mode,
+    (m) => {
+      setMode(params, m);
+      getPhysarum()?.reset();
+      refresh();
+    },
+    'Classic: the textbook rule, four numbers you set. Extended: agents adapt their sensing and movement to the trail under them, described by 15-number presets, with a pen region, waves and inertia. Switching resets the agents.',
+  );
+
+  // ---- presets (extended) ----
+  const slotOptions = Array.from({ length: SLOT_COUNT }, (_, slot) => ({
+    value: slot,
+    text: `${CURATED_SLOTS.includes(slot) ? '* ' : ''}${slotLabel(slot)}`,
+  }));
+  extendedOnly.push(
+    select('background preset', slotOptions, () => params.backgroundPreset, (v) => (params.backgroundPreset = v),
+      'The rules that apply everywhere except under the pen. Changing it eases over the transition time. A star marks curated presets.'),
+    select('pen preset', slotOptions, () => params.penPreset, (v) => (params.penPreset = v),
+      'The rules that apply under the pen (the pointer). The pen and the background blend smoothly.'),
+  );
+
+  // ---- sliders ----
   for (const spec of specs) {
     const row = document.createElement('label');
     row.className = 'tune-row';
@@ -75,28 +153,40 @@ export function buildTuning(
 
     row.append(name, slider, out);
     container.appendChild(row);
+    rows.push({ row, only: spec.only });
     refreshers.push(show);
     show();
   }
 
+  // ---- buttons ----
   const buttons = document.createElement('div');
   buttons.className = 'tune-buttons';
-  const mk = (text: string, fn: () => void) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = text;
-    b.addEventListener('click', () => {
-      fn();
-      b.blur();
-    });
-    buttons.appendChild(b);
-  };
-  mk('Defaults', () => {
-    Object.assign(params, defaults);
-    refreshers.forEach((r) => r());
+  button(buttons, 'Defaults', () => {
+    resetToDefaults(params);
+    refresh();
   });
-  mk('Reset agents (R)', onReset);
+  button(buttons, 'Reset agents (R)', () => getPhysarum()?.reset());
   container.appendChild(buttons);
 
-  return { refresh: () => refreshers.forEach((r) => r()) };
+  const effects = document.createElement('div');
+  effects.className = 'tune-buttons';
+  button(effects, 'Wave', () => getPhysarum()?.triggerWave(), 'An expanding front from the pen (also: left click on the picture).');
+  button(effects, 'Ring burst', () => getPhysarum()?.spawn('ring'), 'A tenth of the agents jump to a ring around the pen for one step.');
+  button(effects, 'Center burst', () => getPhysarum()?.spawn('center'), 'A tenth of the agents jump onto the pen for one step.');
+  container.appendChild(effects);
+  extendedOnly.push(effects);
+
+  const hintLine = document.createElement('p');
+  hintLine.className = 'tune-hint';
+  hintLine.textContent = 'Picture: move = pen, wheel = pen size, left click = wave, right drag = stir.';
+  container.appendChild(hintLine);
+  extendedOnly.push(hintLine);
+
+  function refresh(): void {
+    refreshers.forEach((r) => r());
+    applyVisibility();
+  }
+  applyVisibility();
+
+  return { refresh };
 }

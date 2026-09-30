@@ -81,3 +81,33 @@ Everything below ran on one machine, one NVIDIA GPU (Lovelace), in Chrome inside
 **Seed check on the two contradicted predictions:** repeated with seeds 1, 2 and 3. Sensor distance 4 gave 19 to 24 closed cells at 5.3% coverage on every seed (against 51 to 66 cells at SD 16), and SD 48 gave 16% to 18% coverage. Sensor angle 15 deg had 61% of agents turning per step and 90 deg had 9% on every seed, with the fewest cells at both extremes. So these two findings are not artifacts of seed 7. The other sliders were compared on seed 7 only.
 
 **Not verified:** any GPU other than this one; runs longer than 8 simulated minutes at full speed or 5 real minutes live (the 20-minute run is M8); other seeds for the sliders other than SD and SA; the effect of window resizing or fullscreen during a long run; behavior with a background tab (the browser pauses the loop).
+
+## 2026-09-30, M2 extended Physarum, presets, pen
+
+All GPU results below come from one machine (one NVIDIA GPU, Chrome in the Claude desktop app) at 1043x914. Nothing was run at 1920x1080 in extended mode or on any other GPU.
+
+**Built:** the extended `A + B*S^C` mode (a port of Bleuje's move shader), the 24-row preset matrix (22 selectable slots), background and pen blend, eased transitions, pen with ring, wave, stir, inertia, ring and center bursts, deposit density compensation, per-mode defaults, tuning panel additions (mode, two preset selectors, pen radius, inertia, transition time, effect buttons), on-screen credits, and dev tools for galleries, transitions, filmstrips, pen and effect tests.
+
+**Read first:** Bleuje's `shaders.js`, `parameters.js` and the relevant parts of `main.js`, as the SPEC says. This caught two things before they cost anything: the stir scale (a gamepad axis in -1..1, so my first plan of mouse pixels would have been about 6 times too strong) and the density compensation (`countScale`), without which the tuned presets cannot work at our agent counts.
+
+**Tests:**
+- Unit tests: 30 pass (was 14). New: the matrix equals the copy in SPEC.md value for value, slots and landing-pair decoding, pen weight, vector blend, easing, the `A + B*S^C` values worked by hand for row 21, the extended step (background versus pen preset, S clamp, turn direction, S read with the preset offsets), pixel scale, count scale, mode defaults.
+- GPU self-test, 22 of 22 pass, three runs in a row (11 classic, 11 extended): the extended shader matches the CPU reference on 8 controlled cases (background preset, pen preset with the pen exactly on the agent, S-dependent parameters, wrap, random turn; heading error at most 6e-8 rad, position error at most 5e-5 px), the counter sums to the agent count, no NaN, positions in [0,1), and same seed gives identical agents in extended mode. Not covered on the GPU: waves, stir, inertia, spawn, the noise wobble.
+- Two problems in the test itself were found and fixed (see DECISIONS.md): the self-test raced the frame loop (determinism failed after extended mode made runs slower; the M1 pass was luck), and a mutation check first "survived" because one turn case used a 0.64 px sensor distance and because the dev server had not picked up my edit. After fixing both, a flipped turn direction fails exactly the strengthened case, with a heading error of twice the turn angle.
+
+**Presets:**
+- Gallery of all 22 slots as background (pen off) at 15 s and 45 s, 1M agents: chose 8 by eye (0, 2, 4, 13, 14, 15, 19, 21). The automatic coverage metric could not judge fine-grain presets (it saturates near 1), so the choice is visual.
+- All 8 still alive and structured after 100 simulated seconds. Slot 4's blobs merge (22 cells to 9), the stripes of slot 14 regularize.
+- At 400k agents four of the eight degrade (0 grainy, 14 blurred, 13 fragmented, 15 thinner) while 2, 4, 19, 21 hold. Extended default set to 1M.
+
+**Transitions:** all 56 ordered pairs among the 8 (settle 15 s, switch with a 0.5 s ease, sample at 0.25, 0.5, 1.5, 4, 15 s). None went blank, all ended at 0.82 to 1.11 times the coverage of a pure run of the destination, and the final-state contact sheet (all 56 tiles) shows each destination's character. 15 pairs (all involving slots 13, 14 or 15) show a coverage spike mid-transition. Two were inspected frame by frame (15 to 21, 14 to 19): the picture washes into a fine-grain haze about half a second after the switch and the new structure grows out of it; with a 2 s ease the same passage is a slow dissolve. The other 13 were not inspected frame by frame.
+
+**Pen:** background 21 with pen preset 4 and radius 0.22: a fine cellular honeycomb in the middle of the ribbed rivers, rivers intact outside, a soft halo between, still stable after 16 s in the live page (ring visible). Ring made more visible after this look.
+
+**Interactions:** measured numbers in EXPLAINER.md (spawn 1.5% to 11.4% on the ring and 0.4% to 10.4% at the center, wave correlation 0.97, 0.67, 0.15, network healthy after it expired, stir 91 px against 1 px). Real pointer events in the browser: hover set the pen to the pointer position with the ring at the right size, scroll up grew the pen 0.20 to 0.27 and the slider followed, a click started a wave. Right-drag was tested with synthetic events (the pane cannot hold the right button): stir capped at length 1, faded to 0.0076 in half a second, no stir without the right button, context menu suppressed, pen off when the pointer left.
+
+**Soak and timing (extended, 1M agents):**
+- Accelerated, 30,003 steps (8.3 simulated minutes) with the pen on and inertia 0.3: 0 NaN, 0 out-of-range agents, 0 bad headings, counter sum exact at every check, 0.279 ms per step, -2.6% drift.
+- Live loop, 90 seconds, with a simulated performer (pen circling, a wave every 3 s, a pen preset change every 10 s): exactly 60 steps in every second, GPU total 0.33 to 0.39 ms median, worst 1.31 ms, no frame over 10 ms, JS heap flat (10.7 to 9.1 MB).
+
+**Not verified:** extended mode at 1920x1080 (pixel scale untested there), any other GPU, presets at agent counts other than 400k and 1M, seeds other than 7 for the gallery and effects, all 56 transitions frame by frame (2 inspected), the inertia slider (draft prediction only), right-drag with a real right button, the pen with real long-term use (the longest live run was 90 s), device-loss recovery with the new buffers (M8).

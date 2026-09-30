@@ -131,6 +131,33 @@ kbd {
 }
 .tune-buttons button:hover { border-color: var(--accent); color: var(--accent); }
 
+#pen-ring {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  /* the dark halo keeps the ring readable over bright veins */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 18px rgba(143, 180, 255, 0.25), inset 0 0 18px rgba(143, 180, 255, 0.12);
+  pointer-events: none;
+}
+#stage { cursor: crosshair; }
+.tune-select { grid-template-columns: 1fr 1.6fr; grid-template-areas: "name value"; align-items: center; }
+.tune-select .tune-name { grid-area: name; }
+.tune-select select {
+  grid-area: value;
+  width: 100%;
+  padding: 3px 4px;
+  background: #11141f;
+  color: var(--fg);
+  border: 1px solid var(--dim);
+  border-radius: 4px;
+  font: inherit;
+}
+.tune-hint { margin: 8px 0 0; color: var(--dim); font-size: 11px; }
+#credits { margin: 6px 0; color: var(--dim); font-size: 11px; }
+#credits summary { cursor: pointer; }
+#credits p { margin: 4px 0 0; }
+
 #message {
   position: fixed;
   inset: 0;

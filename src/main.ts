@@ -2,21 +2,21 @@ import { initGpu, resizeCanvas, GpuUnavailableError, type Gpu } from './gpu';
 import { Hud } from './hud';
 import { Song } from './audio';
 import { showMessage, hideMessage, toggleFullscreen } from './ui';
-import { Physarum, simSizeFor } from './physarum/physarum';
-import { DEFAULT_PARAMS, PARAM_SPECS, type PhysarumParams } from './physarum/params';
+import { Physarum, simSizeFor, SIM_HZ } from './physarum/physarum';
+import { DEFAULT_PARAMS, PARAM_SPECS, MODE_EXTENDED, setMode, type PhysarumParams } from './physarum/params';
 import { runSelfTest } from './physarum/selftest';
-import { buildTuning } from './tuning';
+import { buildTuning, type Tuning } from './tuning';
 
-// M1: classic Physarum on the GPU, with a tuning panel. Device init, resize, fixed-step
-// simulation, display, fps HUD, song picker, fullscreen, device-lost recovery.
+// M2: Physarum on the GPU in two modes (classic, extended with presets and a pen), with a
+// tuning panel. Device init, resize, fixed-step simulation, display, pointer pen, fps HUD, song
+// picker, fullscreen, device-lost recovery.
 
 const MAX_RECOVERY_ATTEMPTS = 3;
 
 // The simulation advances in fixed steps, not once per screen refresh, so it runs at the same
 // speed on a 60 Hz and a 144 Hz monitor. If the machine cannot keep up, it slows down rather
 // than spiralling: at most MAX_STEPS_PER_FRAME steps are taken and the backlog is dropped.
-const STEPS_PER_SECOND = 60;
-const STEP_MS = 1000 / STEPS_PER_SECOND;
+const STEP_MS = 1000 / SIM_HZ;
 const MAX_STEPS_PER_FRAME = 2;
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -29,6 +29,7 @@ const canvas = $<HTMLCanvasElement>('stage');
 const messageEl = $('message');
 const setupEl = $('setup');
 const tuningEl = $('tuning');
+const penRing = $('pen-ring');
 
 let gpu: Gpu | null = null;
 let physarum: Physarum | null = null;
@@ -49,7 +50,11 @@ const hud = new Hud($('hud'), () => {
   const t = physarum?.timings;
   return (
     `canvas ${canvas.width}x${canvas.height} (scale ${resolutionScale}), grid ${physarum?.gridWidth}x${physarum?.gridHeight}\n` +
-    `agents ${Math.floor(params.agentCount).toLocaleString()}\n` +
+    `agents ${Math.floor(params.agentCount).toLocaleString()}, rule ${
+      params.mode === MODE_EXTENDED
+        ? `extended (background ${params.backgroundPreset}, pen ${params.penPreset}${physarum?.transitioning ? ', easing' : ''}, waves ${physarum?.activeWaves ?? 0})`
+        : 'classic'
+    }\n` +
     (gpu.hasTimestampQuery && t
       ? `GPU ms: agents ${fmt(t.agent)}, deposit ${fmt(t.deposit)}, diffuse ${fmt(t.diffuse)}, display ${fmt(t.render)}\n`
       : 'GPU timing unavailable (no timestamp-query)\n') +
@@ -68,7 +73,7 @@ const song = new Song({
 });
 void song; // referenced by the cue panel in M6
 
-buildTuning(tuningEl, params, PARAM_SPECS, DEFAULT_PARAMS, () => physarum?.reset());
+const tuning: Tuning = buildTuning(tuningEl, params, PARAM_SPECS, () => physarum);
 
 function attachDevice(g: Gpu): void {
   gpu = g;
@@ -81,6 +86,11 @@ function attachDevice(g: Gpu): void {
     dbg.__song = song;
     dbg.__physarum = physarum;
     dbg.__physarumSelfTest = () => runSelfTest(physarum!);
+    dbg.__setMode = (m: number) => {
+      setMode(params, m);
+      physarum!.reset();
+      tuning.refresh();
+    };
     // Experiment harness (sweeps, soak tests). Loaded on demand so it never ships.
     void import('./physarum/experiments').then((m) => m.installExperiments(physarum!));
   }
@@ -143,11 +153,69 @@ function frame(now: number): void {
   }
   stepAccumulator = Math.min(stepAccumulator, STEP_MS);
 
+  updatePenRing();
+
   physarum.wantTimings = hud.visible;
   const encoder = gpu.device.createCommandEncoder({ label: 'frame' });
   physarum.render(encoder, gpu.context.getCurrentTexture().createView(), canvas.width, canvas.height);
   gpu.device.queue.submit([encoder.finish()]);
   physarum.afterSubmit();
+}
+
+/**
+ * The soft ring at the pointer: it shows the audience (and the performer) where the pen is and
+ * how big. Its radius is the pen sigma, the distance at which the pen preset still has 37%
+ * weight, so the alternate state visibly fades out around it.
+ */
+function updatePenRing(): void {
+  const show = !!physarum && params.mode === MODE_EXTENDED && physarum.pen.active;
+  penRing.hidden = !show;
+  if (!show || !physarum) return;
+  const r = params.penRadius * canvas.clientHeight;
+  penRing.style.width = penRing.style.height = `${2 * r}px`;
+  penRing.style.left = `${physarum.pen.x * canvas.clientWidth}px`;
+  penRing.style.top = `${physarum.pen.y * canvas.clientHeight}px`;
+}
+
+const PEN_MIN = 0.05;
+const PEN_MAX = 0.9;
+
+/**
+ * Pointer input on the picture (SPEC 8.2): move = the pen, wheel = pen size (temporary until the
+ * intensity macro of M6), left click = a wave, right button held and moving = stir. Only in the
+ * extended mode: the classic rule has no pen.
+ */
+function setUpPointer(): void {
+  const norm = (ev: PointerEvent) => ({ x: ev.clientX / canvas.clientWidth, y: ev.clientY / canvas.clientHeight });
+
+  canvas.addEventListener('pointermove', (ev) => {
+    if (!physarum || params.mode !== MODE_EXTENDED) return;
+    const { x, y } = norm(ev);
+    physarum.setPen(x, y, true);
+    if (ev.buttons & 2) {
+      // 40 CSS pixels of movement in one event is full strength (length 1). The push fades by
+      // itself a few frames after the pointer stops.
+      physarum.addStir(ev.movementX / 40, ev.movementY / 40);
+    }
+  });
+  canvas.addEventListener('pointerleave', () => physarum?.setPen(physarum.pen.x, physarum.pen.y, false));
+  canvas.addEventListener('pointerdown', (ev) => {
+    if (!physarum || params.mode !== MODE_EXTENDED) return;
+    const { x, y } = norm(ev);
+    physarum.setPen(x, y, true);
+    if (ev.button === 0) physarum.triggerWave(x, y);
+  });
+  canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
+  canvas.addEventListener(
+    'wheel',
+    (ev) => {
+      if (params.mode !== MODE_EXTENDED) return;
+      ev.preventDefault();
+      params.penRadius = Math.min(PEN_MAX, Math.max(PEN_MIN, params.penRadius * Math.exp(-ev.deltaY * 0.001)));
+      tuning.refresh();
+    },
+    { passive: false },
+  );
 }
 
 function onKey(ev: KeyboardEvent): void {
@@ -185,6 +253,7 @@ async function main(): Promise<void> {
     (ev.currentTarget as HTMLElement).blur();
   });
   window.addEventListener('keydown', onKey);
+  setUpPointer();
 
   // After a hidden tab, rAF timestamps jump; drop history so the HUD stays truthful.
   document.addEventListener('visibilitychange', () => {

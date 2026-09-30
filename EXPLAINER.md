@@ -101,3 +101,86 @@ Two cautions. The GPU timestamps in the HUD are rounded up in steps of about 0.0
 6. `await __physarumSelfTest()` compares the GPU rule with the CPU reference.
 
 The harness is `src/physarum/experiments.ts` (dev builds only). The parameter sweep tool that saves screenshots automatically is part of milestone M7.
+
+---
+
+## 2. Physarum (extended mode, "36 Points")
+
+Milestone M2. Code: `src/physarum/extended.ts` (readable CPU definition), `move_extended.wgsl` (GPU), `presets.ts` (the 22 selectable presets). Switch to it with the "agent rule" selector in the tuning panel (T).
+
+**Evidence:** "Measured" means seed 7, 1M agents, one NVIDIA GPU, 900 steps (15 simulated seconds) after a reset unless stated. Kiwi still verifies and owns the final wording. Anything marked "draft" has not been measured.
+
+### The idea in one paragraph
+
+The same loop as the classic mode (agents leave trail, agents follow trail, trail fades and blurs), with one change. In the classic mode every agent obeys the same four numbers. Here an agent first asks "how much trail is under me?" (call the answer S, between 0 and 1) and then works out how far to look, how wide to look, how sharply to turn and how fast to move as a function of S. A preset is 15 numbers that say how those four functions look. Change the preset and the same swarm produces veins, cells, stripes, mazes or worms.
+
+### What an agent perceives
+
+| Item | Value |
+|---|---|
+| Under itself | The trail at one pixel, shifted forward by SB2 and sideways by SB1 pixels (part of the preset), times SF. That is S, clamped to (0, 1] |
+| Ahead | The trail at three points, at a distance that itself depends on S |
+| Also felt | The pen (how far it is from the pen, through the blend weight), a passing wave (raises S a little), the stir push (near the pen) |
+| Ignores | Other agents (only their trail), everything not under those points |
+| Memory | Position and heading, plus a velocity when inertia is used |
+
+### How it computes its action (one step)
+
+1. **How crowded is it here:** `S = clamp(trail(here + offsets) * SF, 1e-9, 1)`.
+2. **Its four behaviour numbers**, each `A + B * S^C` (a preset supplies A, B and C for each):
+   - sensor distance `SD = SD0 + SDA * S^SDE * pixelScale`
+   - sensor angle `SA = SA0 + SAA * S^SAE`
+   - turn angle `RA = RA0 + RAA * S^RAE`
+   - move distance `MD = MD0 + MDA * S^MDE * pixelScale`
+3. **Sense** three points at distance SD, at angles -SA, 0 and +SA from its heading.
+4. **Turn** by RA toward the higher side sensor. If the middle one is strictly highest, keep going. If the middle one is lowest, pick a side at random.
+5. **Move** by MD, plus the stir push and inertia if they apply. Then add itself to the per-pixel counter.
+
+The whole trail loop after that (deposit, blur, decay) is the same as in the classic mode.
+
+### The pen: two presets, blended by distance
+
+There are two presets at any time, the background and the pen preset. Each agent uses a mix of the two, weighted by `t = exp(-d^2 / sigma^2)`, where d is its distance to the pointer (in units of the screen height, wobbled by slow noise so the edge is alive) and sigma is the pen radius. At the pointer t is 1 (pen rules), at one radius away it is 0.37, far away it is 0 (background rules). All 15 numbers are mixed, so the swarm changes character gradually across the edge, not with a hard line. The ring drawn at the pointer has the radius sigma.
+
+### Interactions
+
+| Gesture | What it does | Measured |
+|---|---|---|
+| Move | The pen follows the pointer | Pen lands at the pointer position, the ring has the expected size |
+| Wheel | Pen radius (temporary, becomes the intensity macro in M6) | Scroll up grew it 0.20 to 0.27 and the slider followed |
+| Left click | A wave: an expanding front from the pointer that lasts 5 seconds. It makes agents feel denser (S up 30% at the peak) and pulls them toward smooth inertial motion | Correlation with an identical run without the wave fell 0.97, 0.67, 0.15 at 0.5, 1.5 and 3 s. The wave had expired at the end and the network was as healthy as without it (coverage 0.64 vs 0.67, cells 350 vs 376) |
+| Right button held and moving | Stir: near the pen agents are pushed in the drag direction, unevenly (noise), fading a few frames after you stop | Agents inside half a radius drifted 91 px in 60 steps against 1 px without stir. The push is capped at length 1 (about 5 px per step at most), fades to 0.008 in half a second |
+| Ring burst, center burst (panel buttons only for now) | For one step, 10% of the agents jump onto a ring around the pen, or onto the pen | Ring: the share of agents on the ring went 1.5% to 11.4%. Center: 0.4% to 10.4% |
+| Inertia (slider) | Agents keep some velocity | Draft, not measured. Prediction: smoother, wider swings around bends |
+
+### The presets
+
+Presets are the 15-number rows of Bleuje's matrix (24 rows; the app offers 22 of them, called slots 0 to 21). Curated slots are starred in the panel.
+
+| Slot | Row | What it looks like (measured, still there after 100 simulated seconds) |
+|---|---|---|
+| 0 | 0 (pure multiscale) | Leaf-vein network at several scales. Grainy at 400k agents |
+| 2 | 2 (vertebrata) | Large cells with thick veins. Holds at 400k |
+| 4 | 3 (star network) | Bright blobs joined by thin tendrils. Blobs merge over time (22 cells to 9). Holds at 400k |
+| 13 | 12 | A labyrinth of curling bands. Breaks into fragments at 400k |
+| 14 | 14 | Long parallel stripes. Blurred and noisy at 400k |
+| 15 | 16 | Curly worms. Thinner at 400k |
+| 19 | 19 | One branching tree of thick veins. Holds at 400k |
+| 21 | 21 (reference default) | Ribbed rivers with fine texture between them. Holds at 400k |
+
+Rejected after looking at all 22 (each as background, 15 s and 45 s): slots 1, 5, 7, 10, 12, 16, 17 look like fine grain, slot 11 like large soft patches, slot 9 like short streaks, slot 20 like rough terrain, slots 3, 6, 8, 18 are interesting but overlap the kept ones (delicate net, spots, lattice, sparse thick veins). Nothing is deleted: they stay selectable, only unstarred.
+
+**Agent count matters.** The presets were tuned for a dense swarm (about 6 agents per pixel). The deposit is compensated for the swarm size (so the trail has the right strength), but the picture still degrades with fewer agents. That is why extended mode starts at 1M agents.
+
+### Changing preset while running
+
+A preset change eases over `preset transition` seconds (default 0.5): every one of the 15 numbers moves along a smooth curve, and the agents keep their positions. All 56 ordered transitions between the 8 curated presets end within 0.82 to 1.11 times the coverage of a pure run of the destination, and none went blank. But 15 of them show a spike of coverage in the middle of the transition, and the two inspected frame by frame (15 to 21 and 14 to 19) pass through a brief haze: about half a second after the switch the picture washes into fine grain before the new structure grows out of it. All 15 involve at least one fine texture (slots 13, 14 or 15) and the halfway set of numbers itself produces grain, so the other 13 very likely look the same, but only these two were looked at. A short ease (0.5 s) reads as a quick wipe, a 2 s ease as a slow dissolve. Which one is right is a scene decision.
+
+### How to verify
+
+In a dev build (`npm run dev`), console:
+
+- `__setMode(1)` switches to extended mode.
+- `await __exp.gallery([0, 2, 4], {agents: 1000000})` looks at presets. `await __exp.transitions([[15, 21]])` checks transitions, `await __exp.filmstrip(15, 21)` shows one frame by frame.
+- `await __exp.penTest(21, 4)` compares pen on and off. `await __exp.effects()` measures spawn, wave and stir.
+- `await __physarumSelfTest()` compares the GPU with the CPU reference for both modes (22 checks).

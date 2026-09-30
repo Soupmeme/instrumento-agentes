@@ -144,3 +144,54 @@ SD (small SD does not give a fine tangle) and SA (larger SA does not branch more
 
 **Performance is judged on the live loop, not on full-speed stepping.**
 Full-speed batches (0.90 ms per step for 2M agents at 1080p) were about half the cost of the live 60 Hz loop (1.6 to 2.1 ms) for the same work. Probable cause: the GPU idles between steps and clocks down (not confirmed). Headroom estimates therefore use the live numbers, with the timestamp quantisation (about 0.066 ms per pass) in mind. Full-speed wall-clock per batch is still the better drift detector, because it is not quantised.
+
+## 2026-09-30, M2 extended Physarum, presets, pen
+
+**Two separate agent shaders (classic and extended), chosen per step by the mode.**
+Alternatives: one shader with a mode branch, or replacing the classic rule. The classic shader is the verified M1 baseline and the version that maps to the course's Patt Vira reference; keeping it untouched keeps its tests and measurements valid and keeps each shader short enough to explain. The extended shader is a port of Bleuje's move shader (CC BY-NC-SA 3.0), restructured for WebGPU with per-agent random streams instead of position hashing. Both share the trail, deposit, diffuse and display code.
+
+**Velocity lives in its own buffer, used only by the extended shader.**
+Alternative: widen the agent struct to 32 bytes. A separate 8-byte-per-agent buffer (16 MB at 2M agents) leaves the classic agent layout and its tests unchanged. Cleared on Reset.
+
+**Deposit density compensation (`countScale`), as in the reference.**
+The reference multiplies each pixel's agent count by `referenceDensity / actualDensity` (reference density 6.28 agents per pixel) before the square root, so the trail has the statistics the presets were tuned on. We run 0.4 to 2 agents per pixel, so without it S would be far too small and every preset would misbehave. Classic mode uses 1. Written into the shared params uniform (replaced a spare field) so the deposit pass needs no new binding.
+
+**Distance scale `pixelScale = 250 * sqrt(area / (1280 * 736))`.**
+Alternative: the reference's 250 for 1280x736 and 300 for 1920x1088, which grows more slowly than the picture. Proportional scaling keeps the composition of a preset the same whether the grid is windowed or full screen. Cost: on a bigger grid the same number of agents is spread thinner. Extended mode was only run and looked at at 1043x914. It has not been run at 1920x1080, so the scaling itself is untested.
+
+**Presets are "slots" (22 of the 24 matrix rows, in the reference's order).**
+The matrix is copied from Bleuje's `parameters.js`; a unit test parses the copy printed in SPEC.md and checks every value. The shader's parameter order (SD0, SDE, SDA, SA0, SAE, SAA, RA0, RAE, RAA, MD0, MDE, MDA, SB1, SB2, SF) matches the SPEC; the names in Bleuje's source are shifted by one, which is a labelling slip in that file, not a difference in behavior (checked against the shader indexing).
+
+**Preset transitions: smoothstep ease over `presetSeconds` of simulation time, all 15 numbers blended linearly, started automatically when a slot changes.**
+Alternative: the reference's per-frame chase with progress^1.5. A fixed-duration ease is deterministic, does not depend on frame rate, and pauses with the simulation. Default 0.5 s (the reference value). The value is a scene property (SPEC 8.3).
+
+**Transitions through a fine-texture preset pass through a haze; the ease time decides whether it reads as a wipe or a dissolve.**
+Observed in all pairs involving slots 13, 14, 15 (15 of the 56 pairs spiked; two inspected frame by frame). A 2 s ease turns the 0.5 s wipe into a slow dissolve. No pair was blanked or failed to reach its destination, so no pair needs special handling, but scene designers should know that a hard 0.5 s change into or out of these presets is visibly a wipe. No two-step paths were needed.
+
+**Pen: Gaussian weight `exp(-d^2 / sigma^2)` in screen-height units, with the reference's slow noise wobble on the distance.**
+Default radius 0.25 of the screen height (reference default 0.5, range 0.15 to 0.85); the ring drawn at the pointer has radius sigma, where the pen still has 37% weight. Ring made brighter with a dark halo after the first look showed it was hard to see over bright veins.
+
+**Pointer mapping in M2: move = pen, wheel = pen radius, left click = wave, right-drag = stir. Bursts only from panel buttons.**
+Move, click and right-drag are already in the SPEC 8.2 vocabulary. The wheel is the future intensity macro that also scales the pen; until M6 defines that macro it changes the pen radius directly, so it is not a new live input. Bursts (ring, center) are rehearsal buttons, not a new live input: the SPEC makes the click the one accent whose look (wave, burst or ring) belongs to the scene, which is M6 work. The panel buttons let the effects be tested now.
+
+**Stir is normalised to the reference scale (length at most 1, times 5 px in the shader), not raw mouse pixels.**
+The reference takes stir from a gamepad stick in -1..1. My first version allowed up to 6 before the same factor of 5, which would have pushed agents about 30 px per step. Found by reading the source, fixed before the first run.
+
+**Simulation time (`frame / 60`) drives the noise, the waves and the transitions, not the wall clock.**
+Runs are repeatable from a seed, and pausing (Freeze, tests) pauses waves and easing as well.
+
+**Extended-mode defaults: decay 0.75, deposit 0.003, display gain 30, respawn 0.001, 1M agents. Switching mode resets the agents.**
+Decay and deposit are the reference values. The display gain is higher because the extended trail is dimmer (about 4 times, from the density compensation). 1M agents because several curated presets degrade at 400k (measured). Cost of 1M: about 0.28 ms per step at 1043x914.
+
+**The display is still the trail through a tanh tone curve, not the per-step agent count the reference draws.**
+The reference draws agent density, which needs about 6 agents per pixel to look solid; at our densities it would look dotted. The unified palette and the delayed-trail colour trick are milestone M5.
+
+**Eight presets curated, chosen by eye from a gallery of all 22.**
+Criteria: clearly structured (not fine grain), distinct from each other, still alive after 100 simulated seconds, and useful as different regimes (calm, dense, scattered, ordered). Chosen: 0, 2, 4, 13, 14, 15, 19, 21. Bleuje's own list of good pen and background pairs was used only as a starting point; nothing was kept without looking at it here. The choice is aesthetic and can change once the song and the scenes exist. Starred in the panel, others remain selectable.
+
+**On-screen credits (a "Credits" block in the setup panel) added, as SPEC 5.1 requires for the CC BY-NC-SA code.**
+
+**Test infrastructure lessons (fixed):**
+- The self-test did not pause the frame loop, so the loop's own 60 Hz steps landed between the test's steps. The determinism check then failed once extended mode made the runs slower. It had passed in M1 by luck of timing. The test now pauses the loop for its duration.
+- A first mutation check "survived" for two independent reasons: the test case that exercises the "left sensor is higher" branch used S = 0.3, which makes the sensor distance 0.64 px so all three sensors read the same cell (fixed: S = 0.55, about 30 px), and the dev server had missed my edit of the mutated file (fixed by restarting it and by checking the served code, not a comment, which Vite strips). After both fixes the mutation is caught, with a heading error of exactly twice the turn angle.
+- Node's native TypeScript mode needs `.ts` in import paths, so tsconfig allows importing `.ts` extensions (noEmit, so harmless) and the modules that tests import use them.

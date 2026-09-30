@@ -12,7 +12,8 @@
 // Background jobs report through window.__job and window.__mon.
 
 import type { Physarum } from './physarum';
-import { DEFAULT_PARAMS, type PhysarumParams } from './params';
+import { DEFAULT_PARAMS, MODE_EXTENDED, modeDefaults, type PhysarumParams } from './params';
+import { rowOfSlot } from './presets';
 
 const TAU = Math.PI * 2;
 
@@ -220,9 +221,12 @@ function tile(trail: Float32Array, W: number, H: number, gain: number, size: num
   return canvas;
 }
 
-function showSheet(tiles: { label: string; canvas: HTMLCanvasElement }[]): void {
-  hideSheet();
-  const sheet = document.createElement('div');
+function showSheet(tiles: { label: string; canvas: HTMLCanvasElement }[], append = false): void {
+  let sheet = document.getElementById('exp-sheet');
+  if (!append) hideSheet();
+  sheet = document.getElementById('exp-sheet');
+  const fresh = !sheet;
+  if (!sheet) sheet = document.createElement('div');
   sheet.id = 'exp-sheet';
   sheet.style.cssText =
     'position:fixed;inset:0;z-index:99;background:#05060a;display:flex;gap:8px;align-items:flex-start;' +
@@ -236,8 +240,10 @@ function showSheet(tiles: { label: string; canvas: HTMLCanvasElement }[]): void 
     fig.append(t.canvas, cap);
     sheet.appendChild(fig);
   }
-  sheet.addEventListener('click', hideSheet);
-  document.body.appendChild(sheet);
+  if (fresh) {
+    sheet.addEventListener('click', hideSheet);
+    document.body.appendChild(sheet);
+  }
 }
 
 function hideSheet(): void {
@@ -318,6 +324,390 @@ export async function sweep(p: Physarum, key: keyof PhysarumParams, values: numb
   }
   showSheet(tiles);
   return rows;
+}
+
+// ---------------------------------------------------------------- extended mode: presets
+
+/** Put the simulation into extended mode with the given presets, settled, from a fresh start. */
+function setExtended(p: Physarum, background: number, pen: number, agents: number): void {
+  Object.assign(p.params, DEFAULT_PARAMS, modeDefaults(MODE_EXTENDED), {
+    mode: MODE_EXTENDED,
+    backgroundPreset: background,
+    penPreset: pen,
+    presetSeconds: 0,
+    agentCount: agents,
+  });
+}
+
+/**
+ * Every listed preset slot as the background (pen off), measured after `steps` and again after
+ * `later` steps, with a contact sheet of the first. Use it to decide which presets are worth
+ * keeping. `stable` is false when the picture has gone nearly blank or collapsed by `later`.
+ */
+export async function gallery(
+  p: Physarum,
+  slots: number[],
+  opts: { seed?: number; steps?: number; later?: number; agents?: number; tile?: number; showLater?: boolean } = {},
+) {
+  const { seed = 7, steps = 900, later = 2700, agents = 1_000_000, tile: tileSize = 235, showLater = false } = opts;
+  const saved = { ...p.params };
+  p.paused = true;
+  p.setPen(0.5, 0.5, false);
+  const W = p.gridWidth;
+  const H = p.gridHeight;
+  const tiles: { label: string; canvas: HTMLCanvasElement }[] = [];
+  const rows: Record<string, unknown>[] = [];
+  try {
+    for (const slot of slots) {
+      setExtended(p, slot, slot, agents);
+      p.reset(seed);
+      for (let i = 0; i < steps; i++) p.step();
+      await p.whenIdle();
+      const T1 = await f32(p, p.trailBuffer, W * H * 4);
+      const a = analyzeTrail(T1, W, H);
+      for (let i = steps; i < later; i++) p.step();
+      await p.whenIdle();
+      const T2 = await f32(p, p.trailBuffer, W * H * 4);
+      const b = analyzeTrail(T2, W, H);
+      const counts = await u32(p, p.counterBuffer, W * H * 4);
+      let occupied = 0;
+      for (const c of counts) if (c > 0) occupied++;
+      const coverageKept = b.coverage / (a.coverage || 1);
+      rows.push({
+        slot,
+        row: rowOfSlot(slot),
+        trailMax: r(a.max, 3),
+        coverage: r(a.coverage, 3),
+        cells: a.cells,
+        meanCellArea: Math.round(a.meanCellArea),
+        laterCoverage: r(b.coverage, 3),
+        laterCells: b.cells,
+        coverageKept: r(coverageKept, 2),
+        occupiedPxLater: occupied,
+        stable: b.coverage > 0.02 && coverageKept > 0.5 && b.nonFinite === 0,
+      });
+      tiles.push({
+        label: `slot ${slot} (row ${rowOfSlot(slot)})  cov ${r(a.coverage, 2)} -> ${r(b.coverage, 2)}, cells ${a.cells} -> ${b.cells}`,
+        canvas: tile(showLater ? T2 : T1, W, H, p.params.displayGain, tileSize),
+      });
+    }
+  } finally {
+    Object.assign(p.params, saved);
+    p.reset();
+    p.paused = false;
+  }
+  showSheet(tiles);
+  return rows;
+}
+
+/** Coverage of each destination preset on its own, reused between calls of transitions(). */
+const steadyCache = new Map<string, number>();
+
+/**
+ * Each pair (from -> to): settle on `from` as background, switch to `to` (eased over
+ * `seconds`), and measure at fixed times after the switch. A transition fails the check when the
+ * picture goes nearly blank at any sample, or when it has not reached about the coverage of a
+ * pure `to` run by the end. Contact sheet shows the final state of each pair.
+ */
+export async function transitions(
+  p: Physarum,
+  pairs: [number, number][],
+  opts: { seed?: number; settle?: number; seconds?: number; agents?: number; tile?: number; final?: number; append?: boolean } = {},
+) {
+  const { seed = 7, settle = 900, seconds = 0.5, agents = 1_000_000, tile: tileSize = 150, final = 900, append = false } = opts;
+  const saved = { ...p.params };
+  p.paused = true;
+  p.setPen(0.5, 0.5, false);
+  const W = p.gridWidth;
+  const H = p.gridHeight;
+  const sampleAt = [15, 30, 90, 240, final];
+  const steady = steadyCache;
+  const tiles: { label: string; canvas: HTMLCanvasElement }[] = [];
+  const rows: Record<string, unknown>[] = [];
+
+  const coverageOf = async () => analyzeTrail(await f32(p, p.trailBuffer, W * H * 4), W, H);
+  try {
+    // Reference coverage of each destination on its own, at the same total age.
+    for (const to of new Set(pairs.map((x) => x[1]))) {
+      const key = `${to}|${seed}|${settle}|${final}|${agents}`;
+      if (steady.has(key)) continue;
+      setExtended(p, to, to, agents);
+      p.reset(seed);
+      for (let i = 0; i < settle + final; i++) p.step();
+      await p.whenIdle();
+      steady.set(key, (await coverageOf()).coverage);
+    }
+    for (const [from, to] of pairs) {
+      setExtended(p, from, from, agents);
+      p.params.presetSeconds = seconds;
+      p.reset(seed);
+      for (let i = 0; i < settle; i++) p.step();
+      await p.whenIdle();
+      const before = await coverageOf();
+      p.params.backgroundPreset = to;
+      p.params.penPreset = to;
+      const samples: number[] = [];
+      let done = 0;
+      let minCov = Infinity;
+      let finalTrail: Float32Array | null = null;
+      for (const at of sampleAt) {
+        while (done < at) {
+          p.step();
+          done++;
+        }
+        await p.whenIdle();
+        const T = await f32(p, p.trailBuffer, W * H * 4);
+        const st = analyzeTrail(T, W, H);
+        samples.push(r(st.coverage, 3));
+        minCov = Math.min(minCov, st.coverage);
+        if (at === final) finalTrail = T;
+      }
+      const target = steady.get(`${to}|${seed}|${settle}|${final}|${agents}`) ?? 0;
+      const reached = samples[samples.length - 1] / (target || 1);
+      const blank = minCov < 0.5 * Math.min(before.coverage, target);
+      rows.push({
+        pair: `${from} -> ${to}`,
+        coverageBefore: r(before.coverage, 3),
+        coverageSamples: samples.join(' '),
+        pureTarget: r(target, 3),
+        reachedTarget: r(reached, 2),
+        blankDuring: blank,
+        ok: !blank && reached > 0.6 && reached < 1.6,
+      });
+      tiles.push({ label: `${from} -> ${to}  ${samples.join(' ')}`, canvas: tile(finalTrail!, W, H, p.params.displayGain, tileSize) });
+    }
+  } finally {
+    Object.assign(p.params, saved);
+    p.reset();
+    p.paused = false;
+  }
+  showSheet(tiles, append);
+  return rows;
+}
+
+/**
+ * The three pen interactions, measured. Spawn: right after a ring burst, how many agents sit on
+ * the ring (expect about the spawn fraction, 10%, more than before). Wave: a wave changes the
+ * picture while it passes (correlation with an identical run that has no wave), and the picture
+ * is still a healthy network once the wave is over. Stir: agents near the pen drift in the stir
+ * direction compared with an identical run without stir.
+ */
+export async function effects(p: Physarum, opts: { seed?: number; agents?: number } = {}) {
+  const { seed = 7, agents = 1_000_000 } = opts;
+  const saved = { ...p.params };
+  p.paused = true;
+  const W = p.gridWidth;
+  const H = p.gridHeight;
+  const sigma = 0.22;
+  const out: Record<string, unknown> = {};
+  const setup = async (steps: number) => {
+    setExtended(p, 21, 4, agents);
+    p.params.penRadius = sigma;
+    p.reset(seed);
+    p.setPen(0.5, 0.5, true);
+    for (let i = 0; i < steps; i++) p.step();
+    await p.whenIdle();
+  };
+  const readAgents = () => f32(p, p.agentBuffer, agents * 16);
+  /** Fraction of agents whose distance from the pen centre (height units) lies in [lo, hi]. */
+  const fractionIn = (A: Float32Array, lo: number, hi: number) => {
+    let n = 0;
+    for (let i = 0; i < agents; i++) {
+      const d = Math.hypot(A[i * 4] * W - 0.5 * W, A[i * 4 + 1] * H - 0.5 * H) / H;
+      if (d >= lo && d <= hi) n++;
+    }
+    return n / agents;
+  };
+  try {
+    // Spawn
+    await setup(300);
+    const before = await readAgents();
+    p.spawn('ring');
+    p.step();
+    await p.whenIdle();
+    const afterRing = await readAgents();
+    const ring = [0.49 * sigma * 1.0, 0.61 * sigma * 1.0];
+    p.spawn('center');
+    p.step();
+    await p.whenIdle();
+    const afterCenter = await readAgents();
+    out.spawn = {
+      ringBandBefore: r(fractionIn(before, ...(ring as [number, number])), 4),
+      ringBandAfterRingBurst: r(fractionIn(afterRing, ...(ring as [number, number])), 4),
+      centerDiscBefore: r(fractionIn(afterRing, 0, 0.2 * sigma), 4),
+      centerDiscAfterCenterBurst: r(fractionIn(afterCenter, 0, 0.2 * sigma), 4),
+      expectedIncrease: 0.1,
+    };
+
+    // Wave: with and without, identical seed
+    const snap = async () => f32(p, p.trailBuffer, W * H * 4);
+    const corrAt = [30, 90, 180, 300, 600, 900];
+    const runWave = async (withWave: boolean) => {
+      await setup(300);
+      if (withWave) p.triggerWave(0.5, 0.5);
+      const shots: Float32Array[] = [];
+      let done = 0;
+      for (const at of corrAt) {
+        while (done < at) {
+          p.step();
+          done++;
+        }
+        await p.whenIdle();
+        shots.push(await snap());
+      }
+      return { shots, active: p.activeWaves };
+    };
+    const w = await runWave(true);
+    const n = await runWave(false);
+    const last = analyzeTrail(w.shots[w.shots.length - 1], W, H);
+    const lastN = analyzeTrail(n.shots[n.shots.length - 1], W, H);
+    out.wave = {
+      correlationWithVsWithoutAtSteps: corrAt.map((at, i) => `${at}: ${r(pearson(w.shots[i], n.shots[i]), 3)}`).join(' '),
+      wavesActiveAtEndOfRun: w.active,
+      coverageAfterWave15s: r(last.coverage, 3),
+      coverageNoWave15s: r(lastN.coverage, 3),
+      cellsAfterWave: last.cells,
+      cellsNoWave: lastN.cells,
+    };
+
+    // Stir: hold a push toward +x for 60 steps, compare mean x displacement near the pen
+    const runStir = async (stir: boolean) => {
+      await setup(300);
+      const A = await readAgents();
+      for (let i = 0; i < 60; i++) {
+        if (stir) p.addStir(1, 0);
+        p.step();
+      }
+      await p.whenIdle();
+      const B = await readAgents();
+      let inside = 0;
+      let dxSum = 0;
+      for (let i = 0; i < agents; i++) {
+        const d = Math.hypot(A[i * 4] * W - 0.5 * W, A[i * 4 + 1] * H - 0.5 * H) / H;
+        if (d > 0.5 * sigma) continue;
+        let dx = (B[i * 4] - A[i * 4]) * W;
+        if (dx > W / 2) dx -= W;
+        if (dx < -W / 2) dx += W;
+        if (Math.abs(dx) > 200) continue; // respawned or wrapped, not part of the drift
+        dxSum += dx;
+        inside++;
+      }
+      return { meanDx: dxSum / inside, agents: inside };
+    };
+    const s1 = await runStir(true);
+    const s0 = await runStir(false);
+    out.stir = {
+      meanDxPixelsOver60StepsWithStir: r(s1.meanDx, 2),
+      meanDxWithoutStir: r(s0.meanDx, 2),
+      agentsInsideHalfSigma: s1.agents,
+    };
+  } finally {
+    Object.assign(p.params, saved);
+    p.reset();
+    p.paused = false;
+  }
+  return out;
+}
+
+/**
+ * One transition, frame by frame: the trail just before the switch and at the given numbers of
+ * steps after it (60 steps = 1 second). This is how the mid-transition look is judged.
+ */
+export async function filmstrip(
+  p: Physarum,
+  from: number,
+  to: number,
+  after: number[] = [0, 10, 20, 30, 45, 60, 90, 150, 300, 900],
+  opts: { seed?: number; settle?: number; seconds?: number; agents?: number; tile?: number; append?: boolean } = {},
+) {
+  const { seed = 7, settle = 900, seconds = 0.5, agents = 1_000_000, tile: tileSize = 150, append = false } = opts;
+  const saved = { ...p.params };
+  p.paused = true;
+  p.setPen(0.5, 0.5, false);
+  const W = p.gridWidth;
+  const H = p.gridHeight;
+  const tiles: { label: string; canvas: HTMLCanvasElement }[] = [];
+  try {
+    setExtended(p, from, from, agents);
+    p.params.presetSeconds = seconds;
+    p.reset(seed);
+    for (let i = 0; i < settle; i++) p.step();
+    await p.whenIdle();
+    p.params.backgroundPreset = to;
+    p.params.penPreset = to;
+    let done = 0;
+    for (const at of after) {
+      while (done < at) {
+        p.step();
+        done++;
+      }
+      await p.whenIdle();
+      const T = await f32(p, p.trailBuffer, W * H * 4);
+      tiles.push({ label: `${from}->${to} +${at} (${r(at / 60, 2)}s)`, canvas: tile(T, W, H, p.params.displayGain, tileSize) });
+    }
+  } finally {
+    Object.assign(p.params, saved);
+    p.reset();
+    p.paused = false;
+  }
+  showSheet(tiles, append);
+}
+
+/**
+ * The pen: run with a pen preset that differs from the background, a static pen at the middle
+ * of the world, and compare the trail inside the pen (within one sigma) with the trail well
+ * outside it (beyond two sigma). Also checks that the outside still looks like the pure
+ * background. Contact sheet: pen off, pen on.
+ */
+export async function penTest(
+  p: Physarum,
+  background: number,
+  pen: number,
+  opts: { seed?: number; steps?: number; sigma?: number; agents?: number; tile?: number } = {},
+) {
+  const { seed = 7, steps = 900, sigma = 0.22, agents = 1_000_000, tile: tileSize = 470 } = opts;
+  const saved = { ...p.params };
+  p.paused = true;
+  const W = p.gridWidth;
+  const H = p.gridHeight;
+  const out: Record<string, unknown> = {};
+  const tiles: { label: string; canvas: HTMLCanvasElement }[] = [];
+
+  const measure = (trail: Float32Array) => {
+    const cx = 0.5 * W;
+    const cy = 0.5 * H;
+    let inS = 0, inN = 0, outS = 0, outN = 0;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const d = Math.hypot((x - cx) / H, (y - cy) / H); // height units, like the shader
+        const v = trail[y * W + x];
+        if (d < sigma) { inS += v; inN++; } else if (d > 2 * sigma) { outS += v; outN++; }
+      }
+    }
+    return { insideMean: r(inS / inN, 4), outsideMean: r(outS / outN, 4) };
+  };
+
+  try {
+    for (const penOn of [false, true]) {
+      setExtended(p, background, pen, agents);
+      p.params.penRadius = sigma;
+      p.reset(seed);
+      p.setPen(0.5, 0.5, penOn);
+      for (let i = 0; i < steps; i++) p.step();
+      await p.whenIdle();
+      const T = await f32(p, p.trailBuffer, W * H * 4);
+      const m = measure(T);
+      const st = analyzeTrail(T, W, H);
+      out[penOn ? 'penOn' : 'penOff'] = { ...m, cells: st.cells, coverage: r(st.coverage, 3), nonFinite: st.nonFinite };
+      tiles.push({ label: `background ${background}, pen ${pen}, sigma ${sigma}, pen ${penOn ? 'ON' : 'off'}`, canvas: tile(T, W, H, p.params.displayGain, tileSize) });
+    }
+  } finally {
+    Object.assign(p.params, saved);
+    p.reset();
+    p.paused = false;
+  }
+  showSheet(tiles);
+  return out;
 }
 
 /** Long-run measurements at intervals, for effects that build up slowly (respawn, decay). */
@@ -661,6 +1051,11 @@ export function installExperiments(p: Physarum): void {
     sweep: (k: keyof PhysarumParams, v: number[], o?: SweepOptions) => sweep(p, k, v, o),
     series: (k: keyof PhysarumParams, v: number[], o?: { seed?: number; steps?: number; every?: number }) => series(p, k, v, o),
     exact: () => exact(p),
+    gallery: (slots: number[], o?: Parameters<typeof gallery>[2]) => gallery(p, slots, o),
+    transitions: (pairs: [number, number][], o?: Parameters<typeof transitions>[2]) => transitions(p, pairs, o),
+    penTest: (bg: number, pen: number, o?: Parameters<typeof penTest>[3]) => penTest(p, bg, pen, o),
+    effects: (o?: Parameters<typeof effects>[1]) => effects(p, o),
+    filmstrip: (from: number, to: number, after?: number[], o?: Parameters<typeof filmstrip>[4]) => filmstrip(p, from, to, after, o),
     soak: (c: SoakConfig) => soak(p, c),
     monitor: (s: number) => monitor(p, s),
     hideSheet,

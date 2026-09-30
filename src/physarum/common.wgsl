@@ -17,7 +17,7 @@ struct Params {
   displayGain: f32,
   canvasWidth: f32,    // only the display pass uses these two
   canvasHeight: f32,
-  pad0: f32,
+  countScale: f32,     // deposit density compensation (1 in classic mode, see extended.ts)
 }
 
 // One agent. pos is NORMALISED (0..1 across the world) so the simulation grid can be resized

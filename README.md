@@ -8,7 +8,7 @@ The performer drives every change by hand. There is no audio analysis, no beat d
 
 ## Status
 
-Early. Milestones M0 (scaffold, song player) and M1 (classic Physarum on the GPU) are done: hundreds of thousands of agents grow a live slime-mold network that you can tune with sliders. Flow fields, steering, flocking, the pen and the scene system come next (M2 to M6). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
+Early. Milestones M0 (scaffold, song player), M1 (classic Physarum) and M2 (extended Physarum with presets and a pen) are done. A million agents grow a live slime-mold network; in the extended mode 22 presets give veins, cells, stripes, mazes or worms, and the pointer is a pen that runs a second preset in a soft circle around it. Flow fields, steering, flocking, shared rendering and the scene system come next (M3 to M6). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
 
 ## Requirements
 
@@ -33,10 +33,19 @@ Once the site has been opened online one time, it reloads with no connection (a 
 | Enter | Toggle fullscreen |
 | D | Toggle the debug HUD (fps, frame time, GPU adapter) |
 | P | Show or hide the setup panel (it fades, so an embedded player keeps playing) |
-| T | Show or hide the tuning panel (sliders for the Physarum parameters; hover a slider for its predicted effect) |
+| T | Show or hide the tuning panel (agent rule, presets, sliders; hover a control for what it does and what was measured) |
 | R | Reset: agents scatter and the trail clears |
 
-The live performance controls (pen, wheel, click, stir, scene keys) arrive with milestone M6.
+On the picture, in the extended mode (choose "extended" under "agent rule" in the tuning panel):
+
+| Input | Action |
+|---|---|
+| Move the mouse | The pen: a soft circle around the pointer that runs the pen preset |
+| Wheel | Pen size (temporary; becomes the intensity macro in M6) |
+| Left click | A wave: an expanding front from the pointer |
+| Hold the right button and move | Stir: agents near the pen are pushed in the drag direction |
+
+The scene system and the full live vocabulary (next and previous scene, jump, freeze, safe mode, cue panel) arrive with milestone M6.
 
 ## Run locally
 
@@ -67,7 +76,7 @@ Pushing to `main` runs `.github/workflows/deploy.yml`, which installs, tests, bu
 
 The algorithms below are the basis of the instrument. Implementation is in progress, so this list will gain specifics as each one lands.
 
-- **Physarum:** Jeff Jones (2010), the original agent model. Tweaks and presets follow Etienne Jacob (Bleuje), [Algorithms for making interesting organic simulations](https://bleuje.com/physarum-explanation/), [physarum-36p](https://github.com/Bleuje/physarum-36p), [interactive-physarum](https://github.com/Bleuje/interactive-physarum) and its [web port](https://bleuje.com/web-interactive-physarum/), which build on Sage Jenson's work ([36 Points](https://sagejenson.com/36points/)). Bleuje's code is under CC BY-NC-SA 3.0; this is non-commercial coursework.
+- **Physarum:** Jeff Jones (2010), the original agent model. Tweaks and presets follow Etienne Jacob (Bleuje), [Algorithms for making interesting organic simulations](https://bleuje.com/physarum-explanation/), [physarum-36p](https://github.com/Bleuje/physarum-36p), [interactive-physarum](https://github.com/Bleuje/interactive-physarum) and its [web port](https://bleuje.com/web-interactive-physarum/), which build on Sage Jenson's work ([36 Points](https://sagejenson.com/36points/)). The 24-row preset matrix is copied from Bleuje's web port (`parameters.js`), and the extended agent shader, the pen blend, the waves, the stir and the spawn bursts are ported from its move shader, restructured for WebGPU. Bleuje's code is under CC BY-NC-SA 3.0, which asks that adaptations stay non-commercial and are shared under the same terms; this is non-commercial coursework.
 - **Steering behaviors and flocking:** Craig Reynolds, [Steering Behaviors For Autonomous Characters](https://www.red3d.com/cwr/steer/gdc99/) (1999). Daniel Shiffman, [The Nature of Code](https://natureofcode.com/), chapter 5.
 - **Flow fields:** Tyler Hobbs, [Flow Fields](https://www.tylerxhobbs.com/words/flow-fields).
 - **Course:** [Simulacion, Unit 6](https://juanferfranco.github.io/simulacion-2026-20/units/unit6/).

@@ -1,4 +1,7 @@
-// Classic Physarum on the GPU (SPEC 5.1, "reference GPU pipeline", WebGPU translation).
+// Physarum on the GPU (SPEC 5.1, "reference GPU pipeline", WebGPU translation), in two modes:
+//   classic:   the textbook rule, three sensors, four parameters (move.wgsl).
+//   extended:  "36 Points" rule, parameters depend on the trail under the agent, a pen region
+//              runs a second preset, waves, inertia, stir, spawn bursts (move_extended.wgsl).
 //
 // One simulation step:
 //   1. clear the per-pixel counter
@@ -13,10 +16,13 @@
 // way. Positions are stored normalised (0..1) so the grid can be resized without moving agents.
 
 import type { Gpu } from '../gpu';
-import type { PhysarumParams } from './params';
+import { MODE_EXTENDED, type PhysarumParams } from './params';
+import { PARAM_COUNT, presetOfSlot } from './presets';
+import { countScaleFor, ease, pixelScaleFor } from './extended';
 import commonWgsl from './common.wgsl?raw';
 import initWgsl from './init.wgsl?raw';
 import moveWgsl from './move.wgsl?raw';
+import moveExtendedWgsl from './move_extended.wgsl?raw';
 import depositWgsl from './deposit.wgsl?raw';
 import diffuseWgsl from './diffuse.wgsl?raw';
 import displayWgsl from './display.wgsl?raw';
@@ -24,9 +30,19 @@ import displayWgsl from './display.wgsl?raw';
 /** Agents allocated up front. `params.agentCount` of them are awake. 2M x 16 B = 32 MB. */
 export const MAX_AGENTS = 2_000_000;
 const AGENT_BYTES = 16; // vec2f pos, f32 heading, f32 progress
+const VELOCITY_BYTES = 8; // vec2f, used only by the extended mode (inertia)
 const PARAM_BYTES = 64;
+const EXT_FLOATS = 64;
 const WORKGROUP = 256;
 const MAX_GRID_SIDE = 1920;
+
+/** Simulation steps per second. The frame loop and every time-based effect use this. */
+export const SIM_HZ = 60;
+const WAVE_COUNT = 5;
+const WAVE_LIFETIME = 5; // seconds (must match the shader)
+const NEVER = -12345; // trigger time of a wave that has not happened
+const STIR_DECAY = 0.85; // per step: the stir push fades when the pointer stops (about 15 steps to 10%)
+const SPAWN_FRACTION = 0.1;
 
 /** Simulation grid for a canvas: same aspect, longest side at most MAX_GRID_SIDE. */
 export function simSizeFor(canvasWidth: number, canvasHeight: number): [number, number] {
@@ -47,6 +63,8 @@ const PASS_DEPOSIT = 1;
 const PASS_DIFFUSE = 2;
 const PASS_RENDER = 3;
 
+export type SpawnMode = 'ring' | 'center';
+
 export class Physarum {
   readonly params: PhysarumParams;
   /** Milliseconds per pass, from GPU timestamps (NaN when unsupported or not yet read). */
@@ -57,6 +75,9 @@ export class Physarum {
   paused = false;
   /** Steps taken since the page loaded (never reset, used by the soak monitor). */
   totalSteps = 0;
+
+  /** The pen, in 0..1 across the world. `active` is false when the pointer is elsewhere. */
+  readonly pen = { x: 0.5, y: 0.5, active: false, stirX: 0, stirY: 0 };
 
   private gpu: Gpu;
   private width = 0;
@@ -69,12 +90,15 @@ export class Physarum {
   private cur = 0;
 
   private paramsBuf: GPUBuffer;
+  private extBuf: GPUBuffer;
   private agentsBuf: GPUBuffer;
+  private velocityBuf: GPUBuffer;
   private trail: GPUBuffer[] = [];
   private counter!: GPUBuffer;
 
   private initPipe: GPUComputePipeline;
   private movePipe: GPUComputePipeline;
+  private moveExtPipe: GPUComputePipeline;
   private depositPipe: GPUComputePipeline;
   private diffusePipe: GPUComputePipeline;
   private displayPipe: GPURenderPipeline;
@@ -82,9 +106,25 @@ export class Physarum {
   private initBG: GPUBindGroup;
   // One bind group per value of `cur`, because the buffers swap roles.
   private moveBG: GPUBindGroup[] = [];
+  private moveExtBG: GPUBindGroup[] = [];
   private depositBG: GPUBindGroup[] = [];
   private diffuseBG: GPUBindGroup[] = [];
   private displayBG: GPUBindGroup[] = [];
+
+  // Extended mode state. Vectors are 16 floats (15 used) so they upload as four vec4f.
+  private bgNow = new Float32Array(16);
+  private penNow = new Float32Array(16);
+  private bgFrom = new Float32Array(16);
+  private penFrom = new Float32Array(16);
+  private bgTo = new Float32Array(16);
+  private penTo = new Float32Array(16);
+  private transitionStart = 0;
+  private appliedBg = -1;
+  private appliedPen = -1;
+  /** Waves, packed for the shader as x, y, trigger time, sigma. */
+  private waves = new Float32Array(WAVE_COUNT * 4);
+  private nextWave = 0;
+  private pendingSpawn: 0 | 1 | 2 = 0;
 
   private querySet: GPUQuerySet | null = null;
   private resolveBuf: GPUBuffer | null = null;
@@ -103,9 +143,19 @@ export class Physarum {
       size: PARAM_BYTES,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    this.extBuf = device.createBuffer({
+      label: 'physarum extended uniforms',
+      size: EXT_FLOATS * 4,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
     this.agentsBuf = device.createBuffer({
       label: 'physarum agents',
       size: MAX_AGENTS * AGENT_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+    });
+    this.velocityBuf = device.createBuffer({
+      label: 'physarum velocities',
+      size: MAX_AGENTS * VELOCITY_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
 
@@ -117,6 +167,7 @@ export class Physarum {
       });
     this.initPipe = compute('physarum init', initWgsl);
     this.movePipe = compute('physarum move', moveWgsl);
+    this.moveExtPipe = compute('physarum move extended', moveExtendedWgsl);
     this.depositPipe = compute('physarum deposit', depositWgsl);
     this.diffusePipe = compute('physarum diffuse', diffuseWgsl);
 
@@ -162,11 +213,22 @@ export class Physarum {
   get agentBuffer(): GPUBuffer {
     return this.agentsBuf;
   }
+  get velocityBuffer(): GPUBuffer {
+    return this.velocityBuf;
+  }
   get trailBuffer(): GPUBuffer {
     return this.trail[this.cur];
   }
   get counterBuffer(): GPUBuffer {
     return this.counter;
+  }
+  /** Simulation time in seconds (resets with Reset). */
+  get simTime(): number {
+    return this.frame / SIM_HZ;
+  }
+  /** The blended preset vectors the shader is using right now (mid-transition included). */
+  get currentPresets(): { background: Float32Array; pen: Float32Array } {
+    return { background: this.bgNow, pen: this.penNow };
   }
 
   /** Change the simulation grid size. The trail is cleared, agents keep their place. */
@@ -190,6 +252,7 @@ export class Physarum {
     const entry = (binding: number, buffer: GPUBuffer): GPUBindGroupEntry => ({ binding, resource: { buffer } });
     const params = entry(0, this.paramsBuf);
     this.moveBG = [];
+    this.moveExtBG = [];
     this.depositBG = [];
     this.diffuseBG = [];
     this.displayBG = [];
@@ -200,6 +263,19 @@ export class Physarum {
         device.createBindGroup({
           layout: this.movePipe.getBindGroupLayout(0),
           entries: [params, entry(1, this.agentsBuf), entry(2, here), entry(3, this.counter)],
+        }),
+      );
+      this.moveExtBG.push(
+        device.createBindGroup({
+          layout: this.moveExtPipe.getBindGroupLayout(0),
+          entries: [
+            params,
+            entry(1, this.agentsBuf),
+            entry(2, here),
+            entry(3, this.counter),
+            entry(4, this.extBuf),
+            entry(5, this.velocityBuf),
+          ],
         }),
       );
       this.depositBG.push(
@@ -235,6 +311,7 @@ export class Physarum {
     const enc = device.createCommandEncoder({ label: 'physarum reset' });
     this.trail.forEach((b) => enc.clearBuffer(b));
     enc.clearBuffer(this.counter);
+    enc.clearBuffer(this.velocityBuf);
     const pass = enc.beginComputePass({ label: 'physarum init' });
     pass.setPipeline(this.initPipe);
     pass.setBindGroup(0, this.initBG);
@@ -242,16 +319,134 @@ export class Physarum {
     pass.end();
     device.queue.submit([enc.finish()]);
     this.cur = 0;
+
+    // Waves, bursts and stir belong to the run that just ended.
+    for (let w = 0; w < WAVE_COUNT; w++) this.waves.set([0.5, 0.5, NEVER, 0.5], w * 4);
+    this.nextWave = 0;
+    this.pendingSpawn = 0;
+    this.pen.stirX = 0;
+    this.pen.stirY = 0;
+    // Presets restart settled on their targets.
+    this.appliedBg = -1;
+    this.appliedPen = -1;
+    this.syncPresets();
+  }
+
+  // ---- Extended mode: presets, pen, waves, spawn ----
+
+  private static fill(target: Float32Array, values: readonly number[]): void {
+    target.fill(0);
+    for (let i = 0; i < PARAM_COUNT; i++) target[i] = values[i];
+  }
+
+  /**
+   * Notice a change of `params.backgroundPreset` / `params.penPreset` and start easing toward
+   * it over `params.presetSeconds`. The first call (after construction or Reset) snaps.
+   */
+  private syncPresets(): void {
+    const { backgroundPreset, penPreset, presetSeconds } = this.params;
+    if (backgroundPreset === this.appliedBg && penPreset === this.appliedPen) return;
+    const first = this.appliedBg < 0;
+    this.bgFrom.set(this.bgNow);
+    this.penFrom.set(this.penNow);
+    Physarum.fill(this.bgTo, presetOfSlot(backgroundPreset));
+    Physarum.fill(this.penTo, presetOfSlot(penPreset));
+    this.appliedBg = backgroundPreset;
+    this.appliedPen = penPreset;
+    this.transitionStart = this.simTime;
+    if (first || presetSeconds <= 0) {
+      this.bgNow.set(this.bgTo);
+      this.penNow.set(this.penTo);
+      this.bgFrom.set(this.bgTo);
+      this.penFrom.set(this.penTo);
+    }
+  }
+
+  private advanceTransition(): void {
+    const { presetSeconds } = this.params;
+    const progress = presetSeconds > 0 ? (this.simTime - this.transitionStart) / presetSeconds : 1;
+    const e = ease(progress);
+    for (let i = 0; i < 16; i++) {
+      this.bgNow[i] = this.bgFrom[i] + (this.bgTo[i] - this.bgFrom[i]) * e;
+      this.penNow[i] = this.penFrom[i] + (this.penTo[i] - this.penFrom[i]) * e;
+    }
+  }
+
+  /** True while a preset transition is still easing. */
+  get transitioning(): boolean {
+    return this.params.presetSeconds > 0 && this.simTime - this.transitionStart < this.params.presetSeconds;
+  }
+
+  /** Move the pen. x and y are 0..1 across the world; `active` false hides it. */
+  setPen(x: number, y: number, active: boolean): void {
+    this.pen.x = Math.min(1, Math.max(0, x));
+    this.pen.y = Math.min(1, Math.max(0, y));
+    this.pen.active = active;
+  }
+
+  /**
+   * Add to the stir push, a vector of length at most 1 (the reference takes it from a stick
+   * axis in -1..1; the shader multiplies by 5, so at most about 5 px per step). It fades by
+   * itself when input stops.
+   */
+  addStir(dx: number, dy: number): void {
+    const max = 1;
+    const sx = this.pen.stirX + dx;
+    const sy = this.pen.stirY + dy;
+    const m = Math.hypot(sx, sy);
+    const k = m > max ? max / m : 1;
+    this.pen.stirX = sx * k;
+    this.pen.stirY = sy * k;
+  }
+
+  /** Start an expanding wave at the pen (or at x, y). At most 5 at once, oldest replaced. */
+  triggerWave(x = this.pen.x, y = this.pen.y): void {
+    this.waves.set([x, y, this.simTime, this.params.penRadius], this.nextWave * 4);
+    this.nextWave = (this.nextWave + 1) % WAVE_COUNT;
+  }
+
+  /** Teleport a fraction of the agents around (ring) or onto (center) the pen for one step. */
+  spawn(mode: SpawnMode): void {
+    this.pendingSpawn = mode === 'ring' ? 1 : 2;
+  }
+
+  /** Number of waves still alive (for the HUD and tests). */
+  get activeWaves(): number {
+    let n = 0;
+    for (let w = 0; w < WAVE_COUNT; w++) if (this.simTime - this.waves[w * 4 + 2] <= WAVE_LIFETIME) n++;
+    return n;
+  }
+
+  private writeExt(): void {
+    const buf = new ArrayBuffer(EXT_FLOATS * 4);
+    const f = new Float32Array(buf);
+    const u = new Uint32Array(buf);
+    f.set(this.bgNow, 0);
+    f.set(this.penNow, 16);
+    f.set(this.waves, 32);
+    f[52] = this.pen.x;
+    f[53] = this.pen.y;
+    f[54] = this.params.penRadius;
+    f[55] = this.pen.active ? 1 : 0;
+    f[56] = this.pen.stirX;
+    f[57] = this.pen.stirY;
+    f[58] = this.params.inertia;
+    f[59] = this.simTime;
+    f[60] = pixelScaleFor(this.width, this.height);
+    u[61] = this.pendingSpawn;
+    f[62] = SPAWN_FRACTION;
+    this.gpu.device.queue.writeBuffer(this.extBuf, 0, buf);
   }
 
   private writeParams(): void {
     const p = this.params;
+    const n = Math.max(0, Math.min(MAX_AGENTS, Math.floor(p.agentCount)));
     const buf = new ArrayBuffer(PARAM_BYTES);
     const u = new Uint32Array(buf);
     const f = new Float32Array(buf);
     u[0] = this.width;
     u[1] = this.height;
-    u[2] = Math.max(0, Math.min(MAX_AGENTS, Math.floor(p.agentCount)));
+    u[2] = n;
     u[3] = this.frame >>> 0;
     u[4] = this.seed >>> 0;
     f[5] = p.sensorDistance;
@@ -264,6 +459,7 @@ export class Physarum {
     f[12] = p.displayGain;
     f[13] = this.canvasWidth;
     f[14] = this.canvasHeight;
+    f[15] = p.mode === MODE_EXTENDED && n > 0 ? countScaleFor(n, this.width, this.height) : 1;
     this.gpu.device.queue.writeBuffer(this.paramsBuf, 0, buf);
   }
 
@@ -282,7 +478,18 @@ export class Physarum {
   /** Advance the simulation by one step. Submits its own work. */
   step(): void {
     const { device } = this.gpu;
+    const extended = this.params.mode === MODE_EXTENDED;
+
+    if (extended) {
+      this.syncPresets();
+      this.advanceTransition();
+      this.writeExt();
+      this.pendingSpawn = 0; // a spawn lasts exactly one step
+      this.pen.stirX *= STIR_DECAY;
+      this.pen.stirY *= STIR_DECAY;
+    }
     this.writeParams();
+
     const groupsX = Math.ceil(this.width / 8);
     const groupsY = Math.ceil(this.height / 8);
 
@@ -290,8 +497,8 @@ export class Physarum {
     enc.clearBuffer(this.counter);
 
     let pass = enc.beginComputePass({ label: 'agents', timestampWrites: this.stamps(PASS_AGENT) });
-    pass.setPipeline(this.movePipe);
-    pass.setBindGroup(0, this.moveBG[this.cur]);
+    pass.setPipeline(extended ? this.moveExtPipe : this.movePipe);
+    pass.setBindGroup(0, (extended ? this.moveExtBG : this.moveBG)[this.cur]);
     this.dispatch1D(pass, this.params.agentCount);
     pass.end();
 

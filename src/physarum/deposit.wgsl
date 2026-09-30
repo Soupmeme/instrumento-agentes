@@ -12,6 +12,8 @@
 fn main(@builtin(global_invocation_id) gid: vec3u) {
   if (gid.x >= params.width || gid.y >= params.height) { return; }
   let idx = gid.y * params.width + gid.x;
-  let n = f32(min(counter[idx], 100u));
+  // countScale is 1 in classic mode. In extended mode it makes fewer agents leave the same
+  // trail as the reference density would, so the presets (tuned on that trail) still work.
+  let n = min(f32(counter[idx]) * params.countScale, 100.0);
   trail[idx] = trail[idx] + sqrt(n) * params.depositFactor;
 }

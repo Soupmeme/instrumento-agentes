@@ -9,6 +9,9 @@
 <body>
   <canvas id="stage"></canvas>
 
+  <!-- The pen: a soft ring that follows the pointer (extended mode). -->
+  <div id="pen-ring" hidden></div>
+
   <!-- Debug HUD: toggled with D. Hidden by default so the audience never sees it. -->
   <pre id="hud" hidden></pre>
 
@@ -28,6 +31,15 @@
     <div id="song-status">No song loaded. Local files work offline.</div>
     <audio id="song" controls hidden></audio>
     <div id="embed-host"></div>
+    <details id="credits">
+      <summary>Credits</summary>
+      <p>
+        Physarum after Jeff Jones (2010). Presets, pen, waves and the extended rule after Etienne Jacob
+        (Bleuje) and Sage Jenson (36 Points), CC BY-NC-SA 3.0, non-commercial coursework.
+        Steering after Craig Reynolds; The Nature of Code by Daniel Shiffman.
+        See the README for links.
+      </p>
+    </details>
     <p class="keys">
       <kbd>Enter</kbd> fullscreen &nbsp; <kbd>D</kbd> debug HUD &nbsp; <kbd>P</kbd> this panel &nbsp; <kbd>T</kbd> tuning &nbsp; <kbd>R</kbd> reset
     </p>
