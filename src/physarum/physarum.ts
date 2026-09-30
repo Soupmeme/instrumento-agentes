@@ -27,6 +27,7 @@ import depositWgsl from './deposit.wgsl?raw';
 import diffuseWgsl from './diffuse.wgsl?raw';
 import displayWgsl from './display.wgsl?raw';
 import { FlowLayer, type FlowInput } from '../flow/flow';
+import { FlockLayer, MAX_BOIDS, type FlockInput } from '../flock/flock';
 
 /** Agents allocated up front. `params.agentCount` of them are awake. 2M x 16 B = 32 MB. */
 export const MAX_AGENTS = 2_000_000;
@@ -58,6 +59,9 @@ export interface PassTimings {
   render: number;
   field: number;
   followers: number;
+  /** The three spatial-grid passes of the flock (count, scan, scatter), together. */
+  flockGrid: number;
+  flock: number;
 }
 
 // Timestamp slots: pass k uses queries 2k (begin) and 2k+1 (end).
@@ -67,14 +71,16 @@ const PASS_DIFFUSE = 2;
 const PASS_RENDER = 3;
 const PASS_FIELD = 4;
 const PASS_FOLLOW = 5;
-const PASS_COUNT = 6;
+const PASS_FLOCK_GRID = 6;
+const PASS_FLOCK = 7;
+const PASS_COUNT = 8;
 
 export type SpawnMode = 'ring' | 'center';
 
 export class Physarum {
   readonly params: PhysarumParams;
   /** Milliseconds per pass, from GPU timestamps (NaN when unsupported or not yet read). */
-  readonly timings: PassTimings = { agent: NaN, deposit: NaN, diffuse: NaN, render: NaN, field: NaN, followers: NaN };
+  readonly timings: PassTimings = { agent: NaN, deposit: NaN, diffuse: NaN, render: NaN, field: NaN, followers: NaN, flockGrid: NaN, flock: NaN };
   /** Set by the HUD: only read timings back while someone is looking at them. */
   wantTimings = false;
   /** While true the frame loop takes no simulation steps (Freeze, and the test harness). */
@@ -89,6 +95,11 @@ export class Physarum {
   readonly flow: FlowLayer;
   /** Draw the flow field as arrows over the picture (debug overlay, key V). */
   fieldArrows = false;
+
+  /** The flock layer: boids, the spatial grid that finds their neighbours, the debug overlay. */
+  readonly flock: FlockLayer;
+  /** Draw the flock's grid and what boid 0 perceives over the picture (debug overlay, key G). */
+  flockDebug = false;
 
   private gpu: Gpu;
   private width = 0;
@@ -151,6 +162,7 @@ export class Physarum {
     this.params = params;
     const { device } = gpu;
     this.flow = new FlowLayer(gpu);
+    this.flock = new FlockLayer(gpu);
 
     this.paramsBuf = device.createBuffer({
       label: 'physarum params',
@@ -262,6 +274,7 @@ export class Physarum {
     this.trail = [0, 1].map((i) => device.createBuffer({ label: `physarum trail ${i}`, size: bytes, usage: storage }));
     this.counter = device.createBuffer({ label: 'physarum counter', size: bytes, usage: storage });
     this.flow.resize(w, h); // the flow layer's grid-sized buffers follow the grid
+    this.flock.resize(w, h);
     this.cur = 0;
 
     const entry = (binding: number, buffer: GPUBuffer): GPUBindGroupEntry => ({ binding, resource: { buffer } });
@@ -296,7 +309,7 @@ export class Physarum {
       this.depositBG.push(
         device.createBindGroup({
           layout: this.depositPipe.getBindGroupLayout(0),
-          entries: [params, entry(1, this.counter), entry(2, here), entry(3, this.flow.counterBuffer)],
+          entries: [params, entry(1, this.counter), entry(2, here), entry(3, this.flow.counterBuffer), entry(4, this.flock.counterBuffer)],
         }),
       );
       this.diffuseBG.push(
@@ -336,6 +349,7 @@ export class Physarum {
     this.cur = 0;
 
     this.flow.reset(this.seed, this.flowInput());
+    this.flock.reset(this.seed, this.flockInput());
 
     // Waves, bursts and stir belong to the run that just ended.
     for (let w = 0; w < WAVE_COUNT; w++) this.waves.set([0.5, 0.5, NEVER, 0.5], w * 4);
@@ -389,9 +403,14 @@ export class Physarum {
     }
   }
 
-  /** True when the pen means something: the extended mode, or followers with a pen edit. */
+  /** True when the pen means something: the extended mode, followers with a pen edit, or boids with a pointer role. */
   get penUsed(): boolean {
-    return this.params.mode === MODE_EXTENDED || (this.params.followerCount > 0 && this.params.penFieldMode > 0);
+    const p = this.params;
+    return p.mode === MODE_EXTENDED || (p.followerCount > 0 && p.penFieldMode > 0) || (p.flockCount > 0 && p.flockPenMode > 0);
+  }
+
+  private flockInput(): FlockInput {
+    return { params: this.params, gridWidth: this.width, gridHeight: this.height, frame: this.frame, seed: this.seed, pen: this.pen };
   }
 
   private flowInput(): FlowInput {
@@ -495,6 +514,7 @@ export class Physarum {
     f[14] = this.canvasHeight;
     f[15] = p.mode === MODE_EXTENDED && n > 0 ? countScaleFor(n, this.width, this.height) : 1;
     f[16] = p.followerDeposit;
+    f[17] = p.boidDeposit;
     this.gpu.device.queue.writeBuffer(this.paramsBuf, 0, buf);
   }
 
@@ -530,6 +550,8 @@ export class Physarum {
     const followers = Math.max(0, Math.min(1_000_000, Math.floor(p.followerCount)));
     const needField = followers > 0 || this.fieldArrows;
     if (needField) this.flow.writeUniform(this.flowInput());
+    const boids = Math.max(0, Math.min(MAX_BOIDS, Math.floor(p.flockCount)));
+    if (boids > 0) this.flock.writeUniform(this.flockInput());
 
     // The pen's stir push fades by itself once the pointer stops.
     this.pen.stirX *= STIR_DECAY;
@@ -542,6 +564,7 @@ export class Physarum {
     const enc = device.createCommandEncoder({ label: 'physarum step' });
     enc.clearBuffer(this.counter);
     enc.clearBuffer(this.flow.counterBuffer);
+    enc.clearBuffer(this.flock.counterBuffer);
 
     if (needField) {
       this.flow.encodeField(enc, this.stamps(PASS_FIELD));
@@ -560,6 +583,13 @@ export class Physarum {
     if (followers > 0) {
       this.flow.encodeFollowers(enc, followers, this.stamps(PASS_FOLLOW));
       ran[PASS_FOLLOW] = true;
+    }
+
+    if (boids > 0) {
+      const gridStamps = this.querySet ? { querySet: this.querySet, begin: 2 * PASS_FLOCK_GRID, end: 2 * PASS_FLOCK_GRID + 1 } : undefined;
+      this.flock.encodeStep(enc, boids, gridStamps, this.stamps(PASS_FLOCK));
+      ran[PASS_FLOCK_GRID] = true;
+      ran[PASS_FLOCK] = true;
     }
 
     let pass = enc.beginComputePass({ label: 'deposit', timestampWrites: this.stamps(PASS_DEPOSIT) });
@@ -609,6 +639,9 @@ export class Physarum {
     pass.end();
 
     if (this.fieldArrows) this.flow.renderArrows(encoder, view, canvasWidth, canvasHeight);
+    if (this.flockDebug && this.params.flockCount > 0) {
+      this.flock.renderDebug(encoder, view, canvasWidth, canvasHeight, Math.min(MAX_BOIDS, Math.floor(this.params.flockCount)));
+    }
 
     // Timings are read back only while the HUD is open, once per step, never in the normal path.
     if (this.wantTimings && this.stepRanSinceResolve && this.querySet && !this.stagingBusy) {
@@ -638,6 +671,8 @@ export class Physarum {
         this.timings.render = ms(PASS_RENDER);
         this.timings.field = ms(PASS_FIELD);
         this.timings.followers = ms(PASS_FOLLOW);
+        this.timings.flockGrid = ms(PASS_FLOCK_GRID);
+        this.timings.flock = ms(PASS_FLOCK);
       })
       .catch(() => undefined)
       .finally(() => {

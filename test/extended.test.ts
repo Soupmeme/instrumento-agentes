@@ -157,10 +157,11 @@ test('S is measured from the trail under the agent, shifted by the preset offset
 test('mode defaults: extended uses the reference trail values and a denser swarm', async () => {
   const { modeDefaults, setMode, resetToDefaults, DEFAULT_PARAMS, MODE_CLASSIC, MODE_EXTENDED } = await import('../src/physarum/params.ts');
   assert.deepEqual(modeDefaults(MODE_EXTENDED), {
-    decay: 0.75, depositFactor: 0.003, displayGain: 30, respawnRate: 0.001, agentCount: 1_000_000, followerDeposit: 0.02,
+    decay: 0.75, depositFactor: 0.003, displayGain: 30, respawnRate: 0.001, agentCount: 1_000_000, followerDeposit: 0.02, boidDeposit: 0.02,
   });
   assert.equal(modeDefaults(MODE_CLASSIC).agentCount, 400_000);
   assert.equal(modeDefaults(MODE_CLASSIC).followerDeposit, 0.05);
+  assert.equal(modeDefaults(MODE_CLASSIC).boidDeposit, 0.05);
 
   const p = { ...DEFAULT_PARAMS };
   setMode(p, MODE_EXTENDED);

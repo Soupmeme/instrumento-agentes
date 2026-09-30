@@ -1,6 +1,6 @@
 # EXPLAINER
 
-How each part of the instrument works, in terms you can defend out loud. One section per agent family. Only Physarum exists so far; flow followers, flocking and coupling are added as their milestones land.
+How each part of the instrument works, in terms you can defend out loud. One section per agent family: Physarum (sections 1 and 2), flow followers (3) and the flock (4). Coupling between the families is added with its milestone (M5).
 
 **Status of the evidence:** "Measured" below means one run with seed 7 on the developer machine (one NVIDIA GPU), 900 steps (15 simulated seconds) after a reset unless stated. It is evidence, not proof, and Kiwi still verifies and owns the final wording of every prediction.
 
@@ -242,7 +242,7 @@ The field says which way to go. The steering rule decides how the agent gets the
 | flee | away from the target at max speed |
 | arrive | like seek, but inside a slowing radius the speed falls linearly to 0 |
 
-`steer = limit(desired - velocity, maxForce)` is shared. Only follow-field runs on the GPU so far; the flock (M4) will use the same functions. A behavior with nothing to say must not return a zero desired velocity (that would brake the agent to a stop): the caller simply does not apply it.
+`steer = limit(desired - velocity, maxForce)` is shared. Follow-field runs in the followers' shader; the flock uses the same functions (steering toward the desired velocities of separation, alignment and cohesion, and seek and flee for the pointer). A behavior with nothing to say must not return a zero desired velocity (that would brake the agent to a stop): the caller simply does not apply it.
 
 ### One material
 
@@ -282,3 +282,99 @@ In a dev build (`npm run dev`), console:
 - `await __physarumSelfTest()` compares the GPU with the CPU references for all three families (35 checks).
 - `await __exp.followerStats({fieldKind: 1, followerForce: 0.02})` measures alignment, speed and turning for any setting. `await __exp.penFieldStats(1)` measures a pen edit (0 none, 1 swirl, 2 attract, 3 repel).
 - `__physarum.fieldArrows = true` (or key V) draws the field.
+
+---
+
+## 4. Flocking (boids)
+
+Milestone M4. Code: `src/flock/` (`flocking.ts` is the readable CPU definition; `flock.wgsl` the boid pass; `flock_grid.wgsl` the spatial grid; `flock_debug.wgsl` the overlay). Turn the family on with the "boids" slider in the tuning panel (T); turn the Physarum agents off with "Physarum agents: off" to see the flock alone; press G for the overlay (the grid, and what one boid perceives).
+
+**Evidence:** "Measured" means 10,000 boids alone (Physarum off), seeds 7, 8 and 9, 900 steps (15 simulated seconds) after a reset, one NVIDIA GPU, simulation grid 1043 x 910. Kiwi still verifies and owns the final wording. "Seen" means looked at in a screenshot, not measured.
+
+### The idea
+
+A flock has no leader and no plan. Every boid follows three steering rules using only the boids near it, and the flock is what happens when thousands do so at once. Two of the rules cooperate (alignment, cohesion) and one competes (separation); the Nature of Code points out that removing either side kills the complexity, which is exactly what the weights let you show live.
+
+### What a boid perceives
+
+| Item | Value |
+|---|---|
+| What it senses | The position and velocity of the other boids within a radius: `separation radius` (12 px) for separation, `neighbour radius` (40 px) for alignment and cohesion |
+| View cone | Alignment and cohesion only count boids inside the view cone (`view angle`, 270 degrees by default, centred on its own velocity). Separation sees all around (see "Two findings" below) |
+| What it ignores | Boids outside the radii, the trail, the flow field, the Physarum agents (the coupling channels come in M5). The pointer is the one outside input, only when the performer uses it |
+| Memory | Its velocity |
+| Global information | None. No leader, no flock centre, no shared heading |
+
+### How it computes its action (one step)
+
+```
+separation : push = sum over neighbours within the separation radius of (away from it) / distance^2
+             desired = push at max speed          (nearer neighbours weigh more: Reynolds' 1/d)
+alignment  : desired = the neighbours' mean velocity, at max speed
+cohesion   : desired = toward the neighbours' mean position, at max speed   (seek)
+steer_k    = limit(desired_k - velocity, maxForce)            (one line, shared with the followers)
+velocity   = limit(velocity + wS * steer_S + wA * steer_A + wC * steer_C [+ pointer], maxSpeed)
+position   = position + velocity                  (the world wraps)
+```
+
+A rule with nothing to perceive stays silent instead of returning a zero desired velocity (which would brake the boid). The weights are the live controls: competition (wS) against cooperation (wA, wC).
+
+### The pointer
+
+The pointer is one more steering force with the same soft circle as the Physarum pen: weight `exp(-d^2 / radius^2)` times "pointer strength". Predator is flee from the pointer, attract is seek toward it. The wheel sets the radius, the same control as the pen.
+
+### The spatial grid (why 50,000 boids are possible)
+
+Finding the neighbours of each of N boids by testing every other boid costs N times N. Reynolds' bin-lattice fixes it: cut the world into cells at least as wide as the largest radius, so every neighbour of a boid lies in its own cell or the 8 around it. Built on the GPU every step with a counting sort in three passes: each boid adds itself to its cell's counter (an atomic add, which also returns its rank in the cell); one workgroup turns the counts into start positions (a prefix sum); each boid copies its state to its slot. The boids of a cell are then next to each other in memory. The result is exact: the self-test compares the GPU step with a CPU that looks at every pair.
+
+Two more properties worth knowing for the defense:
+
+- **Reproducible.** The order in which a boid meets its neighbours is arbitrary (the grid is built with atomics), and float addition depends on order. The sums over neighbours are therefore added as fixed-point integers (1/1024 pixel), which do not. Same seed, same flock, bit for bit (checked with 30,000 boids, 20 steps).
+- **Bounded cost.** If thousands of boids pile into a few cells (the pointer as attractor held still, or cohesion above separation), every boid would test thousands of neighbours: 55 ms per step for 50,000 boids was measured. A work guard limits a step to about 200 million neighbour tests (about 7 ms on the development GPU): when a cell holds more boids than its share, boids test an evenly spaced sample of it. It does nothing below about 50,000 boids at the default radii; above that, or in a collapsed flock, the flock is an approximation (statistically the same, not exact).
+
+### One material
+
+Like the followers, boids do not draw separately. They count themselves into their own per-pixel counter, and the deposit pass turns that into trail with its own weight ("boid trail"), next to the Physarum and follower contributions. Seen: boids alone with a trail decay of about 0.94 leave comet-tailed swarms and, at higher counts, large rotating mills. Next to a million extended-mode Physarum agents the boids are faint (seen); balancing the families is M5.
+
+### Two findings that changed the design
+
+1. **The view cone must not apply to separation.** The first version applied it to all three rules (270 degrees). The flock collapsed: 20,000 boids ended in 2 flocks, 2.2 px between nearest neighbours, about 1,470 neighbours each, moving at 15% of max speed. The CPU reference reproduced it, so it was the rule, not the GPU code. A boid that cannot see the boid behind it never feels it, so the two boids' pushes stop being mutual and only ever point backwards. With separation seeing all around, the same flock is healthy (5.6 px, 92% of max speed). (A sweep of the same settings with no cone at all gave the same healthy flock, which is how the cone was identified.)
+2. **Weights that look equal are not.** Cohesion at the same value as separation collapses the flock into a few dense points (see the table). The transition is sharp, so scenes must keep cohesion clearly below separation.
+
+### Parameters: predicted versus measured
+
+The predictions were written before measuring (they were the draft hints). The hover text in the tuning panel repeats the measured version. Ranges in brackets are across the 3 seeds.
+
+| Parameter | Predicted | Measured | Verdict |
+|---|---|---|---|
+| separation weight | Too low: boids pile on each other. Too high: the flock cannot hold together | Nearest-neighbour distance 0.5 px at 0 (about 1,800 neighbours in reach, the flock collapses), 3.9 at 1, 5.6 at 2, 7.7 at 4; mean speed falls to 79% of max at 4 | Supported. The flock still holds together at 4, only looser and slower |
+| alignment weight | High: one direction. 0: no shared direction, only clumps | 0: local alignment 0.04, speed 41% of max, and no clumps: an even, slow gas. 0.5 already gives local alignment 0.99. 4: the whole world heads one way (global polarisation 1.00 in all 3 seeds) | Partly wrong: without alignment there are no clumps, because separation and cohesion alone spread boids evenly |
+| cohesion weight | High: tight, compact flocks. 0: drift apart | 0: even spread (7.8 px, 62 neighbours). 1.5: tight (2.7 to 4.2 px, 236 to 885 neighbours; one seed nearly collapsed). 2 (equal to separation): collapsed in all 3 seeds (0.2 to 0.5 px, more than 3,800 boids in one grid cell) | Supported, plus a sharp collapse when cohesion reaches separation |
+| separation radius | Sets personal space, so spacing | Nearest neighbour 2.5 px at radius 4, 5.6 at 12, 8.7 at 30 | Supported |
+| neighbour radius | Small: many small flocks. Large: a few big ones | 9 neighbours in reach at 15, 146 at 40, 694 at 100. At 100 all seeds agree on one heading (global polarisation 1.00); at 40 they do not (0.33 to 0.82). No radius split 10,000 boids into many separate flocks | Partly: larger radius does unify the heading, but smaller does not break the flock into pieces at this density |
+| view angle | Narrower: blind behind | 180 to 360 degrees look alike. 60 degrees splits the flock into about 6 groups (against 1) with denser clumps (fullest grid cell 162 against 70 to 107) | Partly: only a narrow cone has an effect |
+| max force | Low: wide lazy turns. High: boids snap into line | 0.02: smoothest, most ordered (local alignment 1.000, 97% of max speed). 0.3: jitterier (0.986, 85%). Spacing hardly changes | Wrong: high force does not tighten the flock, it makes it noisier |
+| max speed | Faster flocks travel more | Structure hardly changes between 1 and 5 px per step; mean speed stays 90 to 96% of max | Supported (it only sets the pace) |
+| pointer (predator) | Boids leave the circle | 13% of boids inside the pen circle with no pointer, 3% at strength 1, 0% at strength 4 | Supported, strongly |
+| pointer (attract) | Boids gather | 5.5% inside at strength 1, all of them at strength 4 and 10 (single seed) | Supported; at 4 the whole flock gathers, so use lower strengths for a gentle pull |
+
+Global polarisation (the length of the average heading) is not a reliable summary: a torus full of boids settles into one of several stable patterns (several counter-rotating mills, or one stream), so the same settings give 0.2 or 1.0 depending on the seed. Local alignment (each boid's heading against its neighbours' mean) is stable across seeds and is the better measure of order.
+
+### Performance and stability (this machine only)
+
+| Test | Result |
+|---|---|
+| GPU time per step with 400k classic Physarum agents and 200k followers also running (total, flock pass in brackets) | 20,000 boids 2.6 ms (2.0), 50,000 boids 3.7 ms (3.3), 100,000 boids 4.7 ms (4.4), 150,000 boids 4.9 ms (4.7); exactly 60 steps per second each time |
+| The pointer held still as an attractor, every boid packed into the pen circle | 50,000 boids 4.7 ms, 150,000 boids 4.5 ms, 60 steps per second. Without the work guard, 50,000 boids cost 55 ms and the loop fell to 18 steps per second |
+| Soak, 50,000 boids + 400k Physarum agents + 200k followers, 18,000 steps (5 simulated minutes, accelerated) | 0 NaN, 0 out-of-range, 0 boids above max speed, boid counter exact at all 10 checks. Statistics flat (nearest neighbour 4.22 to 4.25 px, speed 92% of max). Wall time per 100 steps 144 ms in the first tenth, 132 ms in the last, worst batch 196 ms. The statistics cover the first 20,000 boids |
+| Live loop, 60 s, extended mode: 1M Physarum agents + 500k followers (curl) + 50,000 boids, simulated pointer circling, clicks, pointer alternating predator and attractor every 5 s | Exactly 59 to 61 steps in every second (median 60). GPU total 4.3 ms median in the first quarter, 4.5 in the last, worst second 5.6 ms. Worst frame interval 6.7 ms. JS heap 20 to 17 MB |
+
+Per-pass timestamps overlap on the GPU, so a single pass can look slower than it is; trust the total. The frame interval in the browser pane was 3.3 ms (it does not wait for the display), so the steps per second, not the frame interval, is the evidence that the loop keeps up.
+
+### How to verify
+
+In a dev build (`npm run dev`), console:
+
+- `await __physarumSelfTest()` compares the GPU with the CPU references for all four families (49 checks, 14 of them for the flock).
+- `await __exp.flockStats({flockCohWeight: 1.5}, {count: 10000})` measures order, spacing and flock count for any setting. `__exp.flockSweep(key, values)` does it for several values (background job, poll `window.__flockSweep`). `__exp.flockBench([20000, 100000])` times the passes (open the HUD first, key D). `__exp.flockSoak({flockCount: 50000})` is the accelerated long run.
+- Press G to see the grid and what one boid perceives: white dot = the selected boid (boid 0), red = boids it avoids, green = boids it aligns with and steers toward, the green circle = its neighbour radius with the view cone edges, the red circle = its separation radius.

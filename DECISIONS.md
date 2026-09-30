@@ -236,3 +236,61 @@ Two mutations of the CPU references (the x component of the steering formula, th
 
 **Measured hints replaced the drafts in the tuning panel.**
 Two were partly wrong: look-ahead helps at 10 steps but hurts at 30, and a faster follower with the same force follows a curvy field worse (turning radius grows with speed squared).
+
+## 2026-09-30, M4 flocking on the GPU
+
+**Neighbour search: a uniform grid built with a counting sort, exact within the radius (the SPEC's preferred option), not the approximate aggregate fallback.**
+Alternatives: all-pairs (N squared, dead above a few thousand boids) and per-cell aggregates of position and velocity (cheaper, but a boid then perceives "the average of nine cells" instead of its real neighbours, which the professor could question). The grid cell is at least as wide as the largest of the two radii, so every neighbour lies in the 3 x 3 cells around a boid. Three passes: count (atomicAdd per cell, the returned value is the boid's rank in the cell), scan (one workgroup, prefix sum of up to 65536 cells), scatter (each boid copies its state into its slot). The cell count follows the radius slider every step (at least 3 per side, at most 65536 in all). A CPU twin (`buildGrid`) and an all-pairs reference let the self-test prove the grid misses no neighbour.
+
+**The scatter pass copies the boid states into cell order; the boid pass reads consecutive memory instead of an index list.**
+Alternative: scatter only indices. It was built first and measured: the copy made the boid pass about 14% faster at 20k boids (4.0 ms against 4.7 ms while the flock was still collapsed), a smaller gain than expected, but it also removed one buffer and one indirection. Kept. Flock cost turned out to depend mostly on how many neighbours are in reach (see the view cone entry below).
+
+**Neighbour sums are fixed-point integers (1/1024 pixel), so the flock is bit-reproducible.**
+The grid is built with atomics, so the order in which a boid meets its neighbours changes from run to run, and float addition is not associative. Integer addition is. Alternatives: sort each cell by index (costly) or accept run-to-run differences. Cost: terms are rounded to 1/1024, which changes a force by about 1e-4 relative; the GPU matches the CPU reference to 7e-4 in velocity. The determinism check (30,000 boids, 20 steps, two runs, every value identical) passes.
+
+**Boids are double buffered.**
+The boid pass reads the state at the start of the step and writes the next one, so no boid sees a neighbour that has already moved. Alternative: update in place (less memory, but then results depend on thread order and a flock is not reproducible).
+
+**Three weights, two radii, one view angle, plus the pointer; all steering, all through `steerToward`.**
+A separation radius and a shared alignment and cohesion radius (as in the Nature of Code: 25 and 50 px), one view cone. Reynolds lists a separate distance and angle per behaviour (nine numbers); that is more controls than a performer can use and more than can be defended one by one. Each behaviour chooses a desired velocity (away from crowding, the neighbours' mean heading, the neighbours' centre) and the library's one line turns it into a force. The forces are weighted, added, and the speed is capped.
+
+**The view cone applies to alignment and cohesion only; separation sees all around.**
+Found by measurement. The first version applied the cone to all three behaviours with a default cone of 270 degrees. Flocks collapsed: 20,000 boids ended in 2 flocks with 2.2 px between nearest neighbours, about 1,470 neighbours each, and moved at 15% of max speed (the CPU reference reproduced it at the same density, so it was the rule, not the GPU code). Cause: with a blind spot behind, a boid never feels the boid it is crowding from behind, so the pushes between two boids stop being mutual and only ever point backwards. With the cone off separation, the same flock is healthy (nearest neighbour 5.6 px, 92% of max speed). Reynolds gives each behaviour its own angle, so this stays within his model; personal space is the behaviour where a blind spot makes least sense.
+
+**Tried and reverted: scaling the separation force by how lopsided the crowd is.**
+Before finding the real cause I made the separation force proportional to the size of the summed pushes (a balanced crowd pushes nowhere), reasoning that a normalised sum gives no resistance to compression. A/B on the CPU reference, 1,200 boids, 500 steps: nearest neighbour 6.41 px scaled against 6.54 px normalised, and both collapse at cohesion 2. No measurable effect, so the plain rule (normalised, as in the Nature of Code and Reynolds' advice to normalise each component) was restored. Less to explain.
+
+**Cohesion equal to or above separation collapses the flock; this is left in the range and documented, not clamped.**
+At cohesion 2 (separation 2) all 3 seeds collapsed into a few dense points (0.6 px spacing, up to 4,000 boids in one grid cell). That is what the model does (competition against cooperation, SPEC 5.4), it is a legitimate dramatic state, and it shows why both forces matter. The cost is performance: the boid pass cost grows with boids times neighbours in reach. The work guard below bounds it, so the collapsed state is safe to reach, but scenes should stay out of that corner unless a collapse is the intent.
+
+**The pointer is a steering target: attract is seek, predator is flee, weight exp(-d^2 / sigma^2) times a strength.**
+The same soft circle as the Physarum pen (same radius control and wheel), so one gesture means one region for all families (SPEC 6.3). Alternatives: a speed boost for fleeing boids (as in the three.js example), a hard radius. The force is limited to maxForce before weighting, like every other behaviour. Attract is seek, not arrive: boids overshoot and orbit the pointer, which looks alive; arrive would park them.
+
+**Boids deposit into their own per-pixel counter with their own weight, like followers; the deposit pass has a third term.**
+Same reasons as M3 (one material, each family's share is one live number). Default weights 0.05 (classic) and 0.02 (extended) are starting points, not tuned values. In the extended mode with 1M Physarum agents, boids and followers are faint next to the Physarum network; balance and coupling (boids sensing the trail, the flow bending Physarum) belong to M5.
+
+**Defaults: 0 boids, separation 2, alignment 1.5, cohesion 0.6, radii 12 and 40, cone 270 degrees, max speed 2.5, force 0.08, pointer as predator at strength 4.**
+Starting values chosen by looking at 6k and 20k boids and by the sweeps, not tuned for any scene. The flock is off by default so every earlier result stays valid and scenes (M6) decide.
+
+**Slider limit 150,000 boids.**
+Before the work guard, 262k boids took 49 ms per step at radius 40 (cost grows with count times density). The guard now bounds the cost, but above about 50k boids the flock is an approximation, so the slider stops at 150k. The buffers are still allocated for 262,144.
+
+**Debug overlay on G: the grid, the perception circles and view cone of boid 0, every boid coloured by how boid 0 counts it.**
+For the defense ("what does one boid see?", SPEC 10). Boid 0 is the selected boid; choosing one with the pointer was not built. Not part of the live vocabulary (SPEC 8.2); G is free.
+
+**Timestamp slots grew from 6 to 8 passes** (the flock grid passes count, scan and scatter are timed together; the boid pass separately).
+
+**Test method: two mutation checks with predicted failures.**
+(A) The boid shader skipped the left column of grid cells: predicted that all 7 flock-step cases fail and the 3 grid checks, counter, health and determinism pass. Observed exactly that. (B) The CPU reference's separation sign flipped: predicted that 6 of the 7 flock-step cases fail and "cohesion only" (separation weight 0) passes. Observed exactly that. The served code was checked each time.
+
+**Test tolerance: up to 0.1% of boids may differ in one flock-step case.**
+A neighbour within float error of the radius is in for the GPU (float32) and out for the CPU (float64). One boid in the 2,500-boid large-radius case differed by 5e-3 in velocity (expected: about one such pair per run at that density). A real bug changes hundreds of boids, as mutation A showed.
+
+**A work guard bounds the cost of a step: about 200 million neighbour tests, then crowded cells are sampled.**
+Found by the live run: after the simulated performer stopped with the pointer in attract mode, all 50,000 boids gathered in the pointer circle and the boid pass went to 55 ms (18 steps per second), which would break 60 fps in performance. Alternatives: clamp the pointer strength below the separation weight (hacky, and cohesion above separation collapses the flock as well), lower the boid limit (does not help when the collapse is the state), or leave it for M8. The guard is a per-step budget: each boid examines at most `cap = budget / (9 x boids)` boids of each cell (never below 24), as an evenly spaced sample with a per-boid offset when the cell holds more. The sums are then estimates of the exact ones; nothing changes for cells under the cap. With the guard, 150,000 boids packed into the pointer circle cost 4.5 ms. Cost: in an overloaded cell the subset depends on the arbitrary order inside the cell, so bit-reproducibility holds only while no cell exceeds the cap (the determinism check uses 30,000 boids for that reason), and above about 50,000 boids at the default radii the flock is an approximation.
+
+**The budget is 200 million tests, not 100 million.**
+The first budget (100 million) gave 222 boids per cell at 50,000 boids, just below the fullest cells of a healthy flock (about 250). The guard then sampled them slightly and the 18,000-step soak settled into a denser regime (nearest neighbour 3.0 px instead of 4.2, fullest cell 500 and more instead of about 90). Sampled separation is noisier, the flock compresses, more cells exceed the cap, which compresses it further. The guard must only bite in states that are already pathological, so the budget was doubled (cap 444 at 50,000 boids) and the soak returned to the healthy regime. The cost bound is about 7 ms on the development GPU (about 27 billion tests per second measured), which is the largest flock pass the guard allows; a slower presentation GPU needs fewer boids (M8 quality presets).
+
+**Test method: the guard check proves the guard engaged.**
+"The sampled step is close to the exact one" alone would also pass if the cap were ignored, so the check also runs the same case without the guard and requires the forced-cap run to differ more (3.0e-3 against 3.5e-4 mean velocity difference). The setup is alignment only with a narrow range of headings: separation in a balanced crowd is a tiny leftover of large pushes, so a sample of it cannot be compared boid by boid (a first version of the check failed for that reason: mean difference 0.16, which is what independent random directions give).

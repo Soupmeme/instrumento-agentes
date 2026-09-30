@@ -19,7 +19,7 @@ struct Params {
   canvasHeight: f32,
   countScale: f32,     // deposit density compensation (1 in classic mode, see extended.ts)
   followerDeposit: f32, // trail left per follower (sqrt of the follower count in a pixel times this)
-  pad1: f32,
+  boidDeposit: f32,     // trail left per boid (same role as followerDeposit)
   pad2: f32,
   pad3: f32,
 }

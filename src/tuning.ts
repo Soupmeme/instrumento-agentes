@@ -195,9 +195,8 @@ export function buildTuning(
 
   const hintLine = document.createElement('p');
   hintLine.className = 'tune-hint';
-  hintLine.textContent = 'Picture: move = pen, wheel = pen size, left click = wave, right drag = stir.';
+  hintLine.textContent = 'Picture: move = pen (it acts when the extended rule, pen-edited followers or boids use it), wheel = pen size, right drag = stir; left click = wave (extended rule). With boids on, the pointer is their predator or attractor.';
   container.appendChild(hintLine);
-  extendedOnly.push(hintLine);
 
   function refresh(): void {
     refreshers.forEach((r) => r());

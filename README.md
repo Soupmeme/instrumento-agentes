@@ -8,7 +8,7 @@ The performer drives every change by hand. There is no audio analysis, no beat d
 
 ## Status
 
-Early. Milestones M0 (scaffold, song player), M1 (classic Physarum), M2 (extended Physarum with presets and a pen) and M3 (flow field and flow followers) are done. A million agents grow a live slime-mold network; in the extended mode 22 presets give veins, cells, stripes, mazes or worms, and the pointer is a pen that runs a second preset in a soft circle around it. A second agent family, flow followers, steers along a noise flow field that the pen can swirl, attract or repel, and draws into the same picture. Flocking, coupling between the families, shared rendering and the scene system come next (M4 to M6). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
+Early. Milestones M0 (scaffold, song player), M1 (classic Physarum), M2 (extended Physarum with presets and a pen), M3 (flow field and flow followers) and M4 (flocking) are done. A million agents grow a live slime-mold network; in the extended mode 22 presets give veins, cells, stripes, mazes or worms, and the pointer is a pen that runs a second preset in a soft circle around it. A second agent family, flow followers, steers along a noise flow field that the pen can swirl, attract or repel, and draws into the same picture. A third family, the flock, is boids that steer by separation, alignment and cohesion, each perceiving only the neighbours near it (a spatial grid on the GPU finds them), and the pointer can be their predator or their attractor. Coupling between the families, shared rendering and the scene system come next (M5 and M6). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
 
 ## Requirements
 
@@ -36,6 +36,9 @@ Once the site has been opened online one time, it reloads with no connection (a 
 | T | Show or hide the tuning panel (agent rule, presets, sliders; hover a control for what it does and what was measured) |
 | R | Reset: agents scatter and the trail clears |
 | V | Draw the flow field as arrows (debug overlay) |
+| G | Draw the flock overlay: the spatial grid, and what one boid perceives (its separation and neighbour circles, its view cone, every boid coloured by how it counts them) |
+
+Flock: in the tuning panel raise "boids" (20,000 to 50,000 is a good start; to see them alone set "Physarum agents" to off, and use a slower trail decay, about 0.94). The pointer then scatters them (predator) or gathers them (attractor). Keep cohesion below the separation weight: at equal weights the flock collapses into a few dense points.
 
 Flow followers: in the tuning panel raise "followers" (and, to see them alone, set "Physarum agents" to off). For thin strokes use the curl field, a slow trail decay (about 0.96) and tens of thousands of followers.
 
@@ -80,6 +83,6 @@ Pushing to `main` runs `.github/workflows/deploy.yml`, which installs, tests, bu
 The algorithms below are the basis of the instrument. Implementation is in progress, so this list will gain specifics as each one lands.
 
 - **Physarum:** Jeff Jones (2010), the original agent model. Tweaks and presets follow Etienne Jacob (Bleuje), [Algorithms for making interesting organic simulations](https://bleuje.com/physarum-explanation/), [physarum-36p](https://github.com/Bleuje/physarum-36p), [interactive-physarum](https://github.com/Bleuje/interactive-physarum) and its [web port](https://bleuje.com/web-interactive-physarum/), which build on Sage Jenson's work ([36 Points](https://sagejenson.com/36points/)). The 24-row preset matrix is copied from Bleuje's web port (`parameters.js`), and the extended agent shader, the pen blend, the waves, the stir and the spawn bursts are ported from its move shader, restructured for WebGPU. Bleuje's code is under CC BY-NC-SA 3.0, which asks that adaptations stay non-commercial and are shared under the same terms; this is non-commercial coursework.
-- **Steering behaviors and flocking:** Craig Reynolds, [Steering Behaviors For Autonomous Characters](https://www.red3d.com/cwr/steer/gdc99/) (1999). Daniel Shiffman, [The Nature of Code](https://natureofcode.com/), chapter 5.
+- **Steering behaviors and flocking:** Craig Reynolds, [Steering Behaviors For Autonomous Characters](https://www.red3d.com/cwr/steer/gdc99/) (1999). Daniel Shiffman, [The Nature of Code](https://natureofcode.com/), chapter 5. The flock uses Reynolds' three group behaviors (separation weighted by 1/d, alignment, cohesion) with the Nature of Code's weights and radii as the starting point, Reynolds' bin-lattice idea for neighbor search (a uniform grid, built on the GPU with a counting sort), and the pointer-as-predator idea from the three.js [GPGPU birds example](https://github.com/mrdoob/three.js/blob/dev/examples/webgl_gpgpu_birds.html).
 - **Flow fields:** Tyler Hobbs, [Flow Fields](https://www.tylerxhobbs.com/words/flow-fields).
 - **Course:** [Simulacion, Unit 6](https://juanferfranco.github.io/simulacion-2026-20/units/unit6/).

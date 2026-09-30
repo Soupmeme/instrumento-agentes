@@ -12,6 +12,7 @@
 //      cell by cell with the CPU reference (flowfield.ts); the follower pass is compared with the
 //      CPU steering rule using the GPU's own field as data (so it isolates the steering and the
 //      interpolation from the noise); plus counter sum, no NaN, speed cap and determinism.
+//   7. Flock: grid, boid step and health checks (see src/flock/selftest_flock.ts).
 //   5. Extended mode (36 Points rule): controlled agents on a hand-built trail are stepped once
 //      by move_extended.wgsl and compared with the CPU reference (extended.ts), for the
 //      background preset, for the pen preset (pen exactly on the agent), for trail-dependent
@@ -27,6 +28,7 @@ import { sensorCell, stepAgent, wrap, type AgentState, type StepParams } from '.
 import { extendedValues, mixVectors, pixelScaleFor, stepAgentExtended } from './extended.ts';
 import { MODE_CLASSIC, MODE_EXTENDED, modeDefaults } from './params';
 import { presetOfSlot } from './presets';
+import { flockChecks } from '../flock/selftest_flock';
 import { fieldVector, stepFollower, KIND_NOISE_ANGLE, KIND_CURL, PEN_NONE, PEN_SWIRL, type FieldConfig, type FollowerConfig } from '../flow/flowfield.ts';
 
 export interface SelfTestResult {
@@ -184,6 +186,9 @@ async function runChecks(p: Physarum): Promise<SelfTestResult> {
 
   // ---- 6. Flow field and flow followers ----
   checks.push(...(await flowChecks(p)));
+
+  // ---- 7. Flock ----
+  checks.push(...(await flockChecks(p)));
 
   // Leave the instrument as we found it, with a fresh random start.
   Object.assign(p.params, saved);

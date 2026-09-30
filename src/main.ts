@@ -7,8 +7,8 @@ import { DEFAULT_PARAMS, PARAM_SPECS, MODE_EXTENDED, setMode, type PhysarumParam
 import { runSelfTest } from './physarum/selftest';
 import { buildTuning, type Tuning } from './tuning';
 
-// M2: Physarum on the GPU in two modes (classic, extended with presets and a pen), with a
-// tuning panel. Device init, resize, fixed-step simulation, display, pointer pen, fps HUD, song
+// M4: Physarum (two modes), flow followers and a flock, in one shared picture, with a tuning
+// panel. Device init, resize, fixed-step simulation, display, pointer pen, fps HUD, song
 // picker, fullscreen, device-lost recovery.
 
 const MAX_RECOVERY_ATTEMPTS = 3;
@@ -56,9 +56,9 @@ const hud = new Hud($('hud'), () => {
         : 'classic'
     }\n` +
     (gpu.hasTimestampQuery && t
-      ? `GPU ms: agents ${fmt(t.agent)}, followers ${fmt(t.followers)}, field ${fmt(t.field)}, deposit ${fmt(t.deposit)}, diffuse ${fmt(t.diffuse)}, display ${fmt(t.render)}\n`
+      ? `GPU ms: agents ${fmt(t.agent)}, followers ${fmt(t.followers)}, field ${fmt(t.field)}, flock grid ${fmt(t.flockGrid)}, flock ${fmt(t.flock)}, deposit ${fmt(t.deposit)}, diffuse ${fmt(t.diffuse)}, display ${fmt(t.render)}\n`
       : 'GPU timing unavailable (no timestamp-query)\n') +
-    `followers ${Math.floor(params.followerCount).toLocaleString()}, Physarum ${params.physarumOn ? 'on' : 'off'}, field arrows ${physarum?.fieldArrows ? 'on' : 'off'}\n` +
+    `followers ${Math.floor(params.followerCount).toLocaleString()}, boids ${Math.floor(params.flockCount).toLocaleString()}, Physarum ${params.physarumOn ? 'on' : 'off'}, field arrows ${physarum?.fieldArrows ? 'on' : 'off'}, flock overlay ${physarum?.flockDebug ? 'on' : 'off'}\n` +
     `adapter ${info.vendor || '?'} ${info.architecture || ''} ${info.description || ''}\n` +
     `validation errors ${validationErrors}, device losses ${lostCount}`
   );
@@ -244,6 +244,11 @@ function onKey(ev: KeyboardEvent): void {
     case 'V':
       // Debug overlay: the flow field as arrows (not part of the live vocabulary).
       if (physarum) physarum.fieldArrows = !physarum.fieldArrows;
+      break;
+    case 'g':
+    case 'G':
+      // Debug overlay: the flock's spatial grid and what one boid perceives.
+      if (physarum) physarum.flockDebug = !physarum.flockDebug;
       break;
     case 'r':
     case 'R':

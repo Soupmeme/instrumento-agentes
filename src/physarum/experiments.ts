@@ -9,12 +9,14 @@
 //   exact()                    exact (bit-level) checks of the "does not change the simulation" claims
 //   soak(cfg)                  accelerated long run with periodic health checks (background job)
 //   monitor(seconds)           watch the real-time frame loop and GPU timings (background job)
+//   flockStats(set, opts)      measure a flock (order, spacing, flocks); flockBench(counts, set): GPU time per pass
 // Background jobs report through window.__job and window.__mon.
 
 import type { Physarum } from './physarum';
 import { DEFAULT_PARAMS, MODE_EXTENDED, modeDefaults, type PhysarumParams } from './params';
 import { rowOfSlot } from './presets';
 import { sampleField } from '../flow/flowfield.ts';
+import { flockStats, flockBench, flockSoak, flockSweep } from '../flock/experiments_flock';
 
 const TAU = Math.PI * 2;
 
@@ -1146,7 +1148,8 @@ export function monitor(p: Physarum, seconds: number): Monitor {
     const tm = p.timings;
     if (Number.isFinite(tm.agent)) {
       agent.push(tm.agent);
-      total.push(tm.agent + tm.deposit + tm.diffuse + tm.render);
+      // Every pass that ran in the latest step (a pass that did not run reports NaN).
+      total.push([tm.agent, tm.followers, tm.field, tm.flockGrid, tm.flock, tm.deposit, tm.diffuse, tm.render].reduce((acc, v) => acc + (Number.isFinite(v) ? v : 0), 0));
     }
     requestAnimationFrame(onFrame);
   };
@@ -1210,6 +1213,10 @@ export function installExperiments(p: Physarum): void {
     filmstrip: (from: number, to: number, after?: number[], o?: Parameters<typeof filmstrip>[4]) => filmstrip(p, from, to, after, o),
     soak: (c: SoakConfig) => soak(p, c),
     monitor: (s: number) => monitor(p, s),
+    flockStats: (set?: Partial<PhysarumParams>, o?: Parameters<typeof flockStats>[2]) => flockStats(p, set, o),
+    flockBench: (counts: number[], set?: Partial<PhysarumParams>, o?: Parameters<typeof flockBench>[3]) => flockBench(p, counts, set, o),
+    flockSoak: (set?: Partial<PhysarumParams>, o?: Parameters<typeof flockSoak>[2]) => flockSoak(p, set, o),
+    flockSweep: (k: keyof PhysarumParams, v: number[], set?: Partial<PhysarumParams>, o?: Parameters<typeof flockSweep>[4]) => flockSweep(p, k, v, set, o),
     hideSheet,
   };
 }
