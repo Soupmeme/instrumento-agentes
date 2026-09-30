@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Instrumento de Agentes</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="stage"></canvas>
+
+  <!-- Debug HUD: toggled with D. Hidden by default so the audience never sees it. -->
+  <pre id="hud" hidden></pre>
+
+  <!-- Setup panel: song picker and fullscreen. Toggled with P. Shown at load so the
+       performer can pick the song before going fullscreen. -->
+  <section id="setup">
+    <h1>Instrumento de Agentes</h1>
+    <label class="btn">
+      Choose song
+      <input id="song-file" type="file" accept="audio/*" hidden />
+    </label>
+    <button id="btn-fullscreen" type="button">Fullscreen (Enter)</button>
+    <div id="song-name">No song loaded</div>
+    <audio id="song" controls></audio>
+    <p class="keys">
+      <kbd>Enter</kbd> fullscreen &nbsp; <kbd>D</kbd> debug HUD &nbsp; <kbd>P</kbd> this panel
+    </p>
+  </section>
+
+  <!-- Fatal or recoverable messages (no WebGPU, device lost). -->
+  <div id="message" hidden></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
