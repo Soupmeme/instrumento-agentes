@@ -38,8 +38,16 @@ const hud = new Hud($('hud'), () => {
   );
 });
 
-const song = new Song($<HTMLInputElement>('song-file'), $<HTMLAudioElement>('song'), $('song-name'));
+const song = new Song({
+  fileInput: $<HTMLInputElement>('song-file'),
+  linkInput: $<HTMLInputElement>('song-link'),
+  linkButton: $<HTMLButtonElement>('btn-link'),
+  status: $('song-status'),
+  audio: $<HTMLAudioElement>('song'),
+  embedHost: $('embed-host'),
+});
 void song; // referenced by the cue panel in M6
+if (import.meta.env.DEV) (window as unknown as { __song: Song }).__song = song; // for console checks only
 
 function attachDevice(g: Gpu): void {
   gpu = g;
@@ -115,7 +123,7 @@ function onKey(ev: KeyboardEvent): void {
       break;
     case 'p':
     case 'P':
-      setupEl.hidden = !setupEl.hidden;
+      setupEl.classList.toggle('stealth');
       break;
   }
 }
@@ -142,6 +150,24 @@ async function main(): Promise<void> {
     return;
   }
   requestAnimationFrame(frame);
+}
+
+// Offline support for the deployed site: once visited, it reloads with no connection.
+// Only in production builds, because a caching worker gets in the way of hot reload.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('./sw.js')
+      .then(() => navigator.serviceWorker.ready)
+      .then((reg) => {
+        const urls = [location.href.split('#')[0]];
+        for (const e of performance.getEntriesByType('resource')) {
+          if (e.name.startsWith(location.origin)) urls.push(e.name);
+        }
+        reg.active?.postMessage({ type: 'precache', urls });
+      })
+      .catch((err) => console.warn('Service worker not registered:', err));
+  });
 }
 
 void main();

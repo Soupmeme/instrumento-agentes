@@ -63,8 +63,29 @@ html, body {
   cursor: pointer;
 }
 #setup .btn:hover, #setup button:hover { border-color: var(--accent); color: var(--accent); }
-#song-name { color: var(--dim); margin-bottom: 6px; word-break: break-all; }
+#song-status { color: var(--dim); margin-bottom: 6px; word-break: break-word; }
+#song-status.error { color: #ff9a8f; }
 #song { width: 100%; }
+#embed-host { margin-top: 6px; }
+#embed-host iframe { width: 100%; border: 0; border-radius: 8px; }
+
+.row { display: flex; gap: 6px; margin-bottom: 6px; }
+.row input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fg);
+  border: 1px solid var(--dim);
+  border-radius: 4px;
+  font: inherit;
+}
+.row input:focus { outline: none; border-color: var(--accent); }
+.row button { margin: 0; }
+
+/* P hides the panel by fading it, never by display:none, so an embedded player keeps
+   playing and stays alive while the audience sees only the artwork. */
+#setup.stealth { opacity: 0; pointer-events: none; }
 .keys { margin: 8px 0 0; color: var(--dim); }
 kbd {
   padding: 0 4px;

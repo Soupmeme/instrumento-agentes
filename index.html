@@ -12,7 +12,7 @@
   <!-- Debug HUD: toggled with D. Hidden by default so the audience never sees it. -->
   <pre id="hud" hidden></pre>
 
-  <!-- Setup panel: song picker and fullscreen. Toggled with P. Shown at load so the
+  <!-- Setup panel: song picker and fullscreen. Toggled with P (it fades out but stays alive, so an embedded player keeps playing). Shown at load so the
        performer can pick the song before going fullscreen. -->
   <section id="setup">
     <h1>Instrumento de Agentes</h1>
@@ -21,8 +21,13 @@
       <input id="song-file" type="file" accept="audio/*" hidden />
     </label>
     <button id="btn-fullscreen" type="button">Fullscreen (Enter)</button>
-    <div id="song-name">No song loaded</div>
-    <audio id="song" controls></audio>
+    <div class="row">
+      <input id="song-link" type="text" placeholder="Paste a Spotify, YouTube or audio link" spellcheck="false" autocomplete="off" />
+      <button id="btn-link" type="button">Load</button>
+    </div>
+    <div id="song-status">No song loaded. Local files work offline.</div>
+    <audio id="song" controls hidden></audio>
+    <div id="embed-host"></div>
     <p class="keys">
       <kbd>Enter</kbd> fullscreen &nbsp; <kbd>D</kbd> debug HUD &nbsp; <kbd>P</kbd> this panel
     </p>
