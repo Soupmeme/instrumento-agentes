@@ -6,10 +6,19 @@ import { Physarum, simSizeFor, SIM_HZ } from './physarum/physarum';
 import { DEFAULT_PARAMS, PARAM_SPECS, MODE_EXTENDED, setMode, type PhysarumParams } from './physarum/params';
 import { runSelfTest } from './physarum/selftest';
 import { buildTuning, type Tuning } from './tuning';
+import { Director } from './scenes/director';
+import { loadShippedScenes, onScenesFileChanged } from './scenes';
+import { actionForKey } from './scenes/keys';
+import { saveAutosave } from './scenes/storage';
+import { CuePanel } from './cue';
+import { buildHelp } from './help';
+import { SceneTools } from './scene_tools';
+import type { SceneData } from './scenes/types';
 
-// M4: Physarum (two modes), flow followers and a flock, in one shared picture, with a tuning
-// panel. Device init, resize, fixed-step simulation, display, pointer pen, fps HUD, song
-// picker, fullscreen, device-lost recovery.
+// M6: the instrument. Physarum (two modes), flow followers and a flock in one shared picture,
+// played through scenes (src/scenes): keyboard and mouse as in SPEC 8.2, a cue panel, a help
+// overlay and a rehearsal panel. Device init, resize, fixed-step simulation, display, fps HUD,
+// song picker, fullscreen, device-lost recovery.
 
 const MAX_RECOVERY_ATTEMPTS = 3;
 
@@ -30,6 +39,9 @@ const messageEl = $('message');
 const setupEl = $('setup');
 const tuningEl = $('tuning');
 const penRing = $('pen-ring');
+const helpEl = $('help');
+const cueEl = $('cue');
+const badgeEl = $('badge');
 
 let gpu: Gpu | null = null;
 let physarum: Physarum | null = null;
@@ -37,7 +49,17 @@ let resolutionScale = 1; // becomes a live control with the quality presets (SPE
 let validationErrors = 0;
 let lostCount = 0;
 let lastFrame = 0;
+let lastSliderRefresh = 0;
+let lastIntensity = 0.5;
 let stepAccumulator = 0;
+let director: Director | null = null;
+let sceneList: SceneData[] = loadShippedScenes().scenes;
+let sceneIndex = 0;
+let safeMode = false;
+let sceneStarted = false;
+/** Safe mode runs this fraction of the agents, followers and boids, at SAFE_RESOLUTION of the canvas size. */
+const SAFE_COUNT_SCALE = 0.35;
+const SAFE_RESOLUTION = 0.6;
 
 // Kept outside the Physarum object so the settings survive a device loss.
 const params: PhysarumParams = { ...DEFAULT_PARAMS };
@@ -50,6 +72,9 @@ const hud = new Hud($('hud'), () => {
   const t = physarum?.timings;
   return (
     `canvas ${canvas.width}x${canvas.height} (scale ${resolutionScale}), grid ${physarum?.gridWidth}x${physarum?.gridHeight}\n` +
+    (director?.scene
+      ? `scene ${director.index + 1}/${director.scenes.length} "${director.scene.name}", wheel ${director.intensity.toFixed(2)}, ${director.progress === null ? 'settled' : `transition ${(director.progress * 100).toFixed(0)}%`}, ${physarum?.paused ? 'FROZEN, ' : ''}${safeMode ? 'SAFE MODE' : 'full quality'}\n`
+      : '') +
     `agents ${Math.floor(params.agentCount).toLocaleString()}, rule ${
       params.mode === MODE_EXTENDED
         ? `extended (background ${params.backgroundPreset}, pen ${params.penPreset}${physarum?.transitioning ? ', easing' : ''}, waves ${physarum?.activeWaves ?? 0})`
@@ -72,20 +97,80 @@ const song = new Song({
   audio: $<HTMLAudioElement>('song'),
   embedHost: $('embed-host'),
 });
-void song; // referenced by the cue panel in M6
 
-const tuning: Tuning = buildTuning(tuningEl, params, PARAM_SPECS, () => physarum);
+// The cue panel shows the song's elapsed time, read from the audio element: display only, it
+// triggers nothing (CLAUDE.md rule 2).
+const cue = new CuePanel(cueEl, () => director, () => (song.hasSong ? song.elapsed : null));
+buildHelp(helpEl);
+
+// Edits made in the rehearsal panel are remembered by the current scene, and the scenes are
+// autosaved (a convenience: storage may be blocked, see scenes/storage.ts).
+let autosaveTimer = 0;
+function scheduleAutosave(): void {
+  window.clearTimeout(autosaveTimer);
+  autosaveTimer = window.setTimeout(() => {
+    if (director) saveAutosave(director.scenes);
+  }, 600);
+}
+let sceneTools: SceneTools | null = null;
+// Development only: saving src/scenes/scenes.json re-applies the scenes at once, in the scene
+// the performer is in (no transition, no reset).
+onScenesFileChanged((scenes) => {
+  sceneList = scenes;
+  if (!director) return;
+  director.setScenes(scenes, sceneIndex);
+  cue.refresh();
+  sceneTools?.refresh();
+  tuning.refresh();
+});
+const tuning: Tuning = buildTuning(tuningEl, params, PARAM_SPECS, () => physarum, {
+  onEdit: (key, value) => {
+    director?.edit(key, value);
+    scheduleAutosave();
+  },
+  onBulk: () => {
+    director?.capture(false);
+    scheduleAutosave();
+  },
+  addSceneTools: (container) => {
+    sceneTools = new SceneTools(container, {
+      director: () => director,
+      onScenesChanged: () => {
+        cue.refresh();
+        scheduleAutosave();
+      },
+      refreshSliders: () => tuning.refresh(),
+    });
+  },
+});
 
 function attachDevice(g: Gpu): void {
   gpu = g;
   resizeCanvas(canvas, resolutionScale);
   const [w, h] = simSizeFor(canvas.width, canvas.height);
   physarum = new Physarum(g, params, w, h);
+  physarum.countScale = safeMode ? SAFE_COUNT_SCALE : 1;
+  // The director sits between the performer's inputs and the parameters. On the first device it
+  // enters scene 1; after a recovered device loss it re-applies the scene the performer was in.
+  director = new Director(physarum, sceneList);
+  director.onChange(() => {
+    if (!director) return;
+    sceneIndex = director.index;
+    sceneList = director.scenes as SceneData[];
+    cue.refresh();
+    sceneTools?.refresh();
+    updateBadge();
+  });
+  if (!sceneStarted) {
+    sceneStarted = true;
+    director.goto(0);
+  } else director.setScenes(sceneList, sceneIndex);
   if (import.meta.env.DEV) {
     // Console hooks for checks only, never used by the app itself.
     const dbg = window as unknown as Record<string, unknown>;
     dbg.__song = song;
     dbg.__physarum = physarum;
+    dbg.__director = director;
     dbg.__physarumSelfTest = () => runSelfTest(physarum!);
     dbg.__setMode = (m: number) => {
       setMode(params, m);
@@ -111,6 +196,7 @@ async function handleDeviceLost(info: GPUDeviceLostInfo): Promise<void> {
   lostCount++;
   gpu = null;
   physarum = null;
+  director = null;
   console.error(`WebGPU device lost (${info.reason}): ${info.message}`);
   // reason "destroyed" means we did it on purpose, nothing to recover.
   if (info.reason === 'destroyed') return;
@@ -148,6 +234,7 @@ function frame(now: number): void {
   else stepAccumulator += dt;
   let steps = 0;
   while (stepAccumulator >= STEP_MS && steps < MAX_STEPS_PER_FRAME) {
+    director?.update(); // a transition or the wheel's glide advances by one step, then the world steps
     physarum.step();
     stepAccumulator -= STEP_MS;
     steps++;
@@ -155,6 +242,13 @@ function frame(now: number): void {
   stepAccumulator = Math.min(stepAccumulator, STEP_MS);
 
   updatePenRing();
+  cue.tick(now);
+  // While the rehearsal panel is open, keep its sliders in step with a transition or the wheel.
+  if (!tuningEl.hidden && director && (director.progress !== null || director.intensity !== lastIntensity) && now - lastSliderRefresh > 200) {
+    lastSliderRefresh = now;
+    lastIntensity = director.intensity;
+    tuning.refresh();
+  }
 
   physarum.wantTimings = hud.visible;
   const encoder = gpu.device.createCommandEncoder({ label: 'frame' });
@@ -178,13 +272,10 @@ function updatePenRing(): void {
   penRing.style.top = `${physarum.pen.y * canvas.clientHeight}px`;
 }
 
-const PEN_MIN = 0.05;
-const PEN_MAX = 0.9;
-
 /**
- * Pointer input on the picture (SPEC 8.2): move = the pen, wheel = pen size (temporary until the
- * intensity macro of M6), left click = a wave, right button held and moving = stir. Only in the
- * extended mode: the classic rule has no pen.
+ * Pointer input on the picture (SPEC 8.2): move = the pen, wheel = the intensity macro, left
+ * click = the scene's accent, right button held and moving = stir. The pen exists when the
+ * current regime gives it a meaning (extended rule, pen-edited followers, boids with a pointer role).
  */
 function setUpPointer(): void {
   const norm = (ev: PointerEvent) => ({ x: ev.clientX / canvas.clientWidth, y: ev.clientY / canvas.clientHeight });
@@ -201,59 +292,104 @@ function setUpPointer(): void {
   });
   canvas.addEventListener('pointerleave', () => physarum?.setPen(physarum.pen.x, physarum.pen.y, false));
   canvas.addEventListener('pointerdown', (ev) => {
-    if (!physarum || !physarum.penUsed) return;
+    if (!physarum) return;
     const { x, y } = norm(ev);
-    physarum.setPen(x, y, true);
-    if (ev.button === 0 && params.mode === MODE_EXTENDED) physarum.triggerWave(x, y); // waves exist in the extended mode
+    if (physarum.penUsed) physarum.setPen(x, y, true);
+    if (ev.button === 0) director?.accent(x, y); // the accent: what it looks like belongs to the scene
   });
   canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
   canvas.addEventListener(
     'wheel',
     (ev) => {
-      if (!physarum?.penUsed) return;
       ev.preventDefault();
-      params.penRadius = Math.min(PEN_MAX, Math.max(PEN_MIN, params.penRadius * Math.exp(-ev.deltaY * 0.001)));
-      tuning.refresh();
+      // Browsers report a notch as 100 pixels, or as 3 lines (Firefox), or as pages.
+      const unit = ev.deltaMode === 1 ? 33 : ev.deltaMode === 2 ? 800 : 1;
+      director?.onWheel(ev.deltaY * unit);
     },
     { passive: false },
   );
 }
 
+function toggleFreeze(): void {
+  if (!physarum) return;
+  physarum.paused = !physarum.paused;
+  updateBadge();
+}
+
+/**
+ * Safe mode (SPEC 9): drop the agent, follower and boid counts and the resolution at once, for a
+ * stutter during a performance. Leaving it restores them; nothing in the scenes changes. It also
+ * resumes a frozen picture.
+ */
+function toggleSafeMode(): void {
+  safeMode = !safeMode;
+  // The smaller canvas restarts the trail, which a frozen world could not redraw: resume.
+  if (physarum) physarum.paused = false;
+  resolutionScale = safeMode ? SAFE_RESOLUTION : 1;
+  if (physarum) physarum.countScale = safeMode ? SAFE_COUNT_SCALE : 1;
+  updateBadge();
+}
+
+function updateBadge(): void {
+  const parts: string[] = [];
+  if (physarum?.paused) parts.push('FROZEN');
+  if (safeMode) parts.push('SAFE MODE');
+  badgeEl.textContent = parts.join('  ');
+  badgeEl.hidden = parts.length === 0;
+}
+
 function onKey(ev: KeyboardEvent): void {
-  if (ev.repeat || ev.ctrlKey || ev.altKey || ev.metaKey) return;
   // Enter also activates a focused button, which would toggle twice.
-  if (ev.target instanceof HTMLButtonElement || ev.target instanceof HTMLInputElement) return;
-  switch (ev.key) {
-    case 'Enter':
-      ev.preventDefault();
+  if (ev.target instanceof HTMLButtonElement || ev.target instanceof HTMLInputElement || ev.target instanceof HTMLSelectElement) return;
+  const action = actionForKey(ev);
+  if (!action) return;
+  if (action.type === 'fullscreen' && document.fullscreenElement === null) ev.preventDefault();
+  if (action.type === 'next') ev.preventDefault(); // Space would scroll the page
+  switch (action.type) {
+    case 'next':
+      director?.next();
+      break;
+    case 'previous':
+      director?.previous();
+      break;
+    case 'jump':
+      director?.goto(action.scene);
+      break;
+    case 'freeze':
+      toggleFreeze();
+      break;
+    case 'reset':
+      // Reset (SPEC 8.2): agents scatter and the trail clears, the scene stays.
+      physarum?.reset();
+      break;
+    case 'safe':
+      toggleSafeMode();
+      break;
+    case 'help':
+      helpEl.hidden = !helpEl.hidden;
+      break;
+    case 'cue':
+      cue.toggle();
+      break;
+    case 'fullscreen':
       toggleFullscreen();
       break;
-    case 'd':
-    case 'D':
+    case 'hud':
       hud.toggle();
       break;
-    case 'p':
-    case 'P':
+    case 'setup':
       setupEl.classList.toggle('stealth');
       break;
-    case 't':
-    case 'T':
+    case 'tuning':
       tuningEl.hidden = !tuningEl.hidden;
       break;
-    case 'v':
-    case 'V':
+    case 'fieldArrows':
       // Debug overlay: the flow field as arrows (not part of the live vocabulary).
       if (physarum) physarum.fieldArrows = !physarum.fieldArrows;
       break;
-    case 'g':
-    case 'G':
+    case 'flockOverlay':
       // Debug overlay: the flock's spatial grid and what one boid perceives.
       if (physarum) physarum.flockDebug = !physarum.flockDebug;
-      break;
-    case 'r':
-    case 'R':
-      // Reset (SPEC 8.2): agents scatter and the trail clears.
-      physarum?.reset();
       break;
   }
 }

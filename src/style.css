@@ -179,4 +179,89 @@ kbd {
   white-space: pre-line;
 }
 
+.tune-wrap { flex-wrap: wrap; }
+.tune-readout {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  max-height: 210px;
+  overflow: auto;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: pre;
+}
+.tune-readout:empty { display: none; }
+
+/* Cue panel: a lookup aid for the performer, quiet enough to leave open. */
+#cue {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 300px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: rgba(10, 12, 20, 0.78);
+  border: 1px solid rgba(143, 180, 255, 0.22);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+}
+.cue-clock { font-size: 22px; letter-spacing: 1px; margin-bottom: 8px; }
+.cue-block { margin-bottom: 10px; }
+.cue-label { color: var(--dim); font-size: 11px; letter-spacing: 1px; }
+.cue-name { font-size: 15px; font-weight: 600; margin: 2px 0; }
+.cue-note { color: var(--dim); font-size: 12px; }
+.cue-end { color: var(--dim); font-style: italic; }
+.cue-badge {
+  margin-left: 8px;
+  padding: 0 5px;
+  border: 1px solid #e8b860;
+  border-radius: 3px;
+  color: #e8b860;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.cue-list { margin: 6px 0 0; padding-left: 0; list-style: none; color: var(--dim); font-size: 12px; }
+.cue-list li { padding: 1px 0; white-space: pre; }
+.cue-list .cue-current { color: var(--fg); font-weight: 600; }
+
+/* Help overlay: the whole live vocabulary. Dismissed with H. */
+#help {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 16px 20px;
+  background: rgba(8, 10, 18, 0.92);
+  border: 1px solid rgba(143, 180, 255, 0.3);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  z-index: 5;
+}
+#help h2 { margin: 0 0 6px; font-size: 16px; }
+#help h3 { margin: 14px 0 6px; font-size: 12px; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
+#help p { margin: 4px 0; color: var(--fg); }
+.help-grid { display: grid; grid-template-columns: 96px 1fr; gap: 4px 12px; align-items: baseline; }
+.help-grid kbd { justify-self: start; white-space: nowrap; }
+.help-start { margin-top: 14px !important; color: var(--accent) !important; }
+
+#badge {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  padding: 3px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid #e8b860;
+  border-radius: 4px;
+  color: #e8b860;
+  letter-spacing: 2px;
+  pointer-events: none;
+}
+
 [hidden] { display: none !important; }

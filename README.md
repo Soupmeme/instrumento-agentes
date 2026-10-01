@@ -8,7 +8,7 @@ The performer drives every change by hand. There is no audio analysis, no beat d
 
 ## Status
 
-Early. Milestones M0 (scaffold, song player), M1 (classic Physarum), M2 (extended Physarum with presets and a pen), M3 (flow field and flow followers), M4 (flocking) and M5 (coupling and one shared look) are done. A million agents grow a live slime-mold network; in the extended mode 22 presets give veins, cells, stripes, mazes or worms, and the pointer is a pen that runs a second preset in a soft circle around it. A second agent family, flow followers, steers along a noise flow field that the pen can swirl, attract or repel, and draws into the same picture. A third family, the flock, is boids that steer by separation, alignment and cohesion, each perceiving only the neighbours near it (a spatial grid on the GPU finds them), and the pointer can be their predator or their attractor. The families perceive one another only through shared fields, and two coupling channels change how agents move: the flow field can steer the Physarum agents, and the boids can climb the trail's gradient, each with one live strength. Everything is drawn through one of six palettes, with a delayed copy of the trail tinting where the picture is changing, so the three families read as a single medium. The scene system and the live vocabulary come next (M6). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
+Early. Milestones M0 (scaffold, song player), M1 (classic Physarum), M2 (extended Physarum with presets and a pen), M3 (flow field and flow followers), M4 (flocking) and M5 (coupling and one shared look) and M6 (scenes and the live instrument) are done. A million agents grow a live slime-mold network; in the extended mode 22 presets give veins, cells, stripes, mazes or worms, and the pointer is a pen that runs a second preset in a soft circle around it. A second agent family, flow followers, steers along a noise flow field that the pen can swirl, attract or repel, and draws into the same picture. A third family, the flock, is boids that steer by separation, alignment and cohesion, each perceiving only the neighbours near it (a spatial grid on the GPU finds them), and the pointer can be their predator or their attractor. The families perceive one another only through shared fields, and two coupling channels change how agents move: the flow field can steer the Physarum agents, and the boids can climb the trail's gradient, each with one live strength. Everything is drawn through one of six palettes, with a delayed copy of the trail tinting where the picture is changing, so the three families read as a single medium. The piece is a list of scenes (data, in `src/scenes/scenes.json`; three PLACEHOLDER scenes ship for testing, the real ones are the performer's); you move between them with keys and shape each with the pen, the wheel, the click and the stir. Verification, rehearsal hardening and the fluid stretch come next (M7 to M9). See [SPEC.md](SPEC.md) for the full plan and milestones, and [LOGBOOK.md](LOGBOOK.md) for what has been built and tested so far.
 
 ## Requirements
 
@@ -26,34 +26,28 @@ Spotify links are not supported: its embedded player would not play full tracks 
 
 Once the site has been opened online one time, it reloads with no connection (a service worker caches it). Local files then work fully offline.
 
-## Keys (current)
+## Playing it
 
-| Key | Action |
+The page opens with a help overlay (H closes it) and the first scene. The whole live vocabulary:
+
+| Input | Meaning |
 |---|---|
-| Enter | Toggle fullscreen |
-| D | Toggle the debug HUD (fps, frame time, GPU adapter) |
-| P | Show or hide the setup panel (it fades, so an embedded player keeps playing) |
-| T | Show or hide the tuning panel (agent rule, presets, sliders; hover a control for what it does and what was measured) |
-| R | Reset: agents scatter and the trail clears |
-| V | Draw the flow field as arrows (debug overlay) |
-| G | Draw the flock overlay: the spatial grid, and what one boid perceives (its separation and neighbour circles, its view cone, every boid coloured by how it counts them) |
+| Move the mouse | The pen: a soft circle around the pointer where the world runs another state. What it does depends on the scene |
+| Wheel | Intensity: one knob that moves several things together (up for more). It also scales the pen |
+| Left click | Accent: the scene's wave, burst or ring at the pointer |
+| Hold the right button and move | Stir: your drag pushes the world inside the pen |
+| Space / B | Next scene / previous scene |
+| 1 to 9 | Jump to that scene |
+| F | Freeze (hold the picture), again to resume |
+| R | Reset: agents scatter, trail clears, same scene |
+| S (or Esc) | Safe mode: fewer agents and a lower resolution, again to leave (in full screen the browser keeps Esc, so use S) |
+| H / C | Help overlay / cue panel (current and next scene, the song's clock, the scene list) |
 
-Coupling and look (tuning panel, groups "Coupling" and "Look"): "flow steers Physarum" bends Physarum veins along the flow field (0.5 aligns them clearly and halves the number of closed cells, 1 lines the network up with the flow); "trail attracts boids" makes the flock follow the trail's thicker parts (graded up to about 1.5, then it locks on and collapses). "palette" picks the colour ramp, "change colour" tints growing trail with the palette's accent.
+No key needs Shift, Ctrl or Alt. For rehearsal only: **T** the rehearsal panel (every parameter of the current scene, with what each does and what was measured; capture the live state as a scene, export and import scenes as JSON, rehearse a transition), **P** the song panel, **D** the debug readout, **V** the flow field arrows, **G** the flock overlay, **Enter** full screen.
 
-Flock: in the tuning panel raise "boids" (20,000 to 50,000 is a good start; to see them alone set "Physarum agents" to off, and use a slower trail decay, about 0.94). The pointer then scatters them (predator) or gathers them (attractor). Keep cohesion below the separation weight: at equal weights the flock collapses into a few dense points.
+The three scenes that ship are PLACEHOLDERS (calm, dense, scattered) for testing the engine. Scenes are data in `src/scenes/scenes.json`; edit it with the dev server running and the change appears at once, or edit in the rehearsal panel and export. Nothing in the picture is driven by the music: the song plays from a plain player and every change comes from the performer.
 
-Flow followers: in the tuning panel raise "followers" (and, to see them alone, set "Physarum agents" to off). For thin strokes use the curl field, a slow trail decay (about 0.96) and tens of thousands of followers.
-
-On the picture, in the extended mode (choose "extended" under "agent rule" in the tuning panel), or with followers on and a pen edit chosen:
-
-| Input | Action |
-|---|---|
-| Move the mouse | The pen: a soft circle around the pointer that runs the pen preset |
-| Wheel | Pen size (temporary; becomes the intensity macro in M6) |
-| Left click | A wave: an expanding front from the pointer (extended mode) |
-| Hold the right button and move | Stir: agents near the pen are pushed in the drag direction |
-
-The scene system and the full live vocabulary (next and previous scene, jump, freeze, safe mode, cue panel) arrive with milestone M6.
+Where things are in the rehearsal panel: "Coupling" (flow steers Physarum: 0.5 aligns the veins clearly and halves the closed cells, 1 lines the network up with the flow; trail attracts boids: graded up to about 1.5, then the flock locks onto the trail and collapses), "Look" (palette, change colour), "Flock" (boids; keep cohesion below the separation weight, at equal weights the flock collapses into a few dense points), "Flow followers" (for thin strokes use the curl field, a slow decay and tens of thousands of followers).
 
 ## Run locally
 

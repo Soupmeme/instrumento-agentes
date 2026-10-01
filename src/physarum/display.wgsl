@@ -59,6 +59,12 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   // 1. tone, 2. colour
   let v = tanh(params.displayGain * t);
   var colour = palette(params.palette, v);
+  var accent = PALETTE_ACCENTS[params.palette];
+  // During a scene transition the palette crossfades to the next scene's palette.
+  if (params.paletteMix > 0.0) {
+    colour = mix(colour, palette(params.paletteB, v), params.paletteMix);
+    accent = mix(accent, PALETTE_ACCENTS[params.paletteB], params.paletteMix);
+  }
 
   // 3. change: t - d is about a fifth of how much the trail moved, and after the tone gain it is
   // typically 0.01 to 0.03 (measured in M5), so it is scaled up by 25 before tanh. Growing trail
@@ -70,7 +76,7 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   // white-hot vein a tint or a darkening reads as grit (seen in M5), and in the dark there is
   // nothing to tint.
   let mid = 4.0 * v * (1.0 - v);
-  colour = colour + PALETTE_ACCENTS[params.palette] * growing * mid * 0.9;
+  colour = colour + accent * growing * mid * 0.9;
   colour = colour * (1.0 - 0.4 * fading * mid);
 
   // A faint vignette: the corners are a little darker, which keeps the eye on the middle.

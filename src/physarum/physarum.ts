@@ -37,7 +37,7 @@ import { FlockLayer, MAX_BOIDS, type FlockInput } from '../flock/flock';
 export const MAX_AGENTS = 2_000_000;
 const AGENT_BYTES = 16; // vec2f pos, f32 heading, f32 progress
 const VELOCITY_BYTES = 8; // vec2f, used only by the extended mode (inertia)
-const PARAM_BYTES = 96;
+const PARAM_BYTES = 112;
 /** Edge darkening of the display (0 = none). A fixed, subtle value; see DECISIONS (M5). */
 const VIGNETTE = 0.15;
 const EXT_FLOATS = 64;
@@ -51,6 +51,10 @@ const WAVE_LIFETIME = 5; // seconds (must match the shader)
 const NEVER = -12345; // trigger time of a wave that has not happened
 const STIR_DECAY = 0.85; // per step: the stir push fades when the pointer stops (about 15 steps to 10%)
 const SPAWN_FRACTION = 0.1;
+/** The accent's pointer surge fades by this factor per step (about 0.3 s to a tenth). */
+const SURGE_DECAY = 0.96;
+/** At full surge the boids' pointer weight rises by this factor, and the field edit goes to full strength. */
+const SURGE_BOOST = 3;
 
 /** Simulation grid for a canvas: same aspect, longest side at most MAX_GRID_SIDE. */
 export function simSizeFor(canvasWidth: number, canvasHeight: number): [number, number] {
@@ -155,6 +159,10 @@ export class Physarum {
   private waves = new Float32Array(WAVE_COUNT * 4);
   private nextWave = 0;
   private pendingSpawn: 0 | 1 | 2 = 0;
+  private pendingFraction = SPAWN_FRACTION;
+  private surgeValue = 0;
+  /** Safe mode and quality presets: fraction of the configured agent, follower and boid counts that run (1 = all). */
+  countScale = 1;
   /** Which passes ran in the most recent step (for the timing readout). */
   private ranLast: boolean[] = new Array(PASS_COUNT).fill(false);
 
@@ -428,12 +436,12 @@ export class Physarum {
   }
 
   private flockInput(): FlockInput {
-    return { params: this.params, gridWidth: this.width, gridHeight: this.height, frame: this.frame, seed: this.seed, pen: this.pen };
+    return { params: this.effectiveParams(), gridWidth: this.width, gridHeight: this.height, frame: this.frame, seed: this.seed, pen: this.pen };
   }
 
   private flowInput(): FlowInput {
     return {
-      params: this.params,
+      params: this.effectiveParams(),
       gridWidth: this.width,
       gridHeight: this.height,
       frame: this.frame,
@@ -471,14 +479,47 @@ export class Physarum {
   }
 
   /** Start an expanding wave at the pen (or at x, y). At most 5 at once, oldest replaced. */
-  triggerWave(x = this.pen.x, y = this.pen.y): void {
-    this.waves.set([x, y, this.simTime, this.params.penRadius], this.nextWave * 4);
+  triggerWave(x = this.pen.x, y = this.pen.y, sizeMultiplier = 1): void {
+    this.waves.set([x, y, this.simTime, this.params.penRadius * sizeMultiplier], this.nextWave * 4);
     this.nextWave = (this.nextWave + 1) % WAVE_COUNT;
   }
 
   /** Teleport a fraction of the agents around (ring) or onto (center) the pen for one step. */
-  spawn(mode: SpawnMode): void {
+  spawn(mode: SpawnMode, fraction = SPAWN_FRACTION): void {
     this.pendingSpawn = mode === 'ring' ? 1 : 2;
+    this.pendingFraction = Math.min(0.5, Math.max(0.01, fraction));
+  }
+
+  /**
+   * The accent's momentary surge (SPEC 8.2): the pointer's forces on boids and on the flow field
+   * rise by `amount` (0..1) and fade by themselves within about a second. Always at least the
+   * current surge, so two clicks in a row do not cancel each other.
+   */
+  surge(amount: number): void {
+    this.surgeValue = Math.max(this.surgeValue, Math.min(1, Math.max(0, amount)));
+  }
+
+  get currentSurge(): number {
+    return this.surgeValue;
+  }
+
+  /**
+   * The parameters as the GPU passes see them this step: the configured ones, with the counts
+   * scaled down in safe mode and the pointer's forces raised by the accent's surge. The same
+   * object when neither applies (the normal case allocates nothing).
+   */
+  private effectiveParams(): PhysarumParams {
+    const p = this.params;
+    if (this.countScale === 1 && this.surgeValue <= 0) return p;
+    const s = this.surgeValue;
+    return {
+      ...p,
+      agentCount: Math.floor(p.agentCount * this.countScale),
+      followerCount: Math.floor(p.followerCount * this.countScale),
+      flockCount: Math.floor(p.flockCount * this.countScale),
+      flockPenStrength: p.flockPenStrength * (1 + SURGE_BOOST * s),
+      penFieldStrength: p.penFieldStrength + s * (1 - p.penFieldStrength),
+    };
   }
 
   /** Number of waves still alive (for the HUD and tests). */
@@ -505,12 +546,12 @@ export class Physarum {
     f[59] = this.simTime;
     f[60] = pixelScaleFor(this.width, this.height);
     u[61] = this.pendingSpawn;
-    f[62] = SPAWN_FRACTION;
+    f[62] = this.pendingFraction;
     this.gpu.device.queue.writeBuffer(this.extBuf, 0, buf);
   }
 
   private writeParams(): void {
-    const p = this.params;
+    const p = this.effectiveParams();
     const n = Math.max(0, Math.min(MAX_AGENTS, Math.floor(p.agentCount)));
     const buf = new ArrayBuffer(PARAM_BYTES);
     const u = new Uint32Array(buf);
@@ -539,6 +580,8 @@ export class Physarum {
     u[21] = Math.max(0, Math.min(PALETTE_COUNT - 1, Math.floor(p.palette)));
     f[22] = p.changeColour;
     f[23] = VIGNETTE;
+    u[24] = Math.max(0, Math.min(PALETTE_COUNT - 1, Math.floor(p.paletteB)));
+    f[25] = Math.min(1, Math.max(0, p.paletteMix));
     this.gpu.device.queue.writeBuffer(this.paramsBuf, 0, buf);
   }
 
@@ -557,7 +600,7 @@ export class Physarum {
   /** Advance the simulation by one step. Submits its own work. */
   step(): void {
     const { device } = this.gpu;
-    const p = this.params;
+    const p = this.effectiveParams();
     const extended = p.mode === MODE_EXTENDED;
 
     if (extended) {
@@ -637,6 +680,7 @@ export class Physarum {
     this.totalSteps++;
     this.ranLast = ran;
     this.stepRanSinceResolve = true;
+    this.surgeValue = this.surgeValue * SURGE_DECAY < 0.01 ? 0 : this.surgeValue * SURGE_DECAY;
   }
 
   /** Resolves when the GPU has finished everything submitted so far. Tests and tools only. */
@@ -665,7 +709,7 @@ export class Physarum {
 
     if (this.fieldArrows) this.flow.renderArrows(encoder, view, canvasWidth, canvasHeight);
     if (this.flockDebug && this.params.flockCount > 0) {
-      this.flock.renderDebug(encoder, view, canvasWidth, canvasHeight, Math.min(MAX_BOIDS, Math.floor(this.params.flockCount)));
+      this.flock.renderDebug(encoder, view, canvasWidth, canvasHeight, Math.min(MAX_BOIDS, Math.floor(this.params.flockCount * this.countScale)));
     }
 
     // Timings are read back only while the HUD is open, once per step, never in the normal path.

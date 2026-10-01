@@ -1,7 +1,8 @@
-// Tuning panel (toggle with T): one slider per parameter, for rehearsal and for the
-// defense ("what happens if I change SA?"). NOT part of the live vocabulary: during a
-// performance the performer never touches raw parameters (SPEC 8.1). This is the seed of the
-// hidden tuning panel of milestone M6.
+// Rehearsal panel (toggle with T): one slider per parameter of the current scene, for rehearsal
+// and for the defense ("what happens if I change SA?"), plus the scene tools (capture, export,
+// import, rehearse). NOT part of the live vocabulary: during a performance the performer never
+// touches raw parameters (SPEC 8.1). An edit here changes the current scene in memory (the
+// director remembers it), and the wheel still drives the parameters the scene binds to it.
 
 import {
   MODE_CLASSIC, MODE_EXTENDED, resetToDefaults, setMode, type ParamSpec, type PhysarumParams,
@@ -36,19 +37,30 @@ export interface Tuning {
   refresh(): void;
 }
 
+export interface TuningHooks {
+  /** One parameter was changed by hand. */
+  onEdit?: (key: keyof PhysarumParams, value: number) => void;
+  /** Many parameters changed at once (a new agent rule, "Defaults"). */
+  onBulk?: () => void;
+  /** Add the scene tools at the top of the panel; returns a function that refreshes them. */
+  addSceneTools?: (container: HTMLElement) => void;
+}
+
 export function buildTuning(
   container: HTMLElement,
   params: PhysarumParams,
   specs: readonly ParamSpec[],
   getPhysarum: () => Physarum | null,
+  hooks: TuningHooks = {},
 ): Tuning {
   const refreshers: (() => void)[] = [];
   const rows: { row: HTMLElement; only?: 'classic' | 'extended' }[] = [];
   const extendedOnly: HTMLElement[] = [];
 
   const title = document.createElement('h2');
-  title.textContent = 'Physarum tuning';
+  title.textContent = 'Rehearsal panel';
   container.appendChild(title);
+  hooks.addSceneTools?.(container);
 
   const applyVisibility = () => {
     const extended = params.mode === MODE_EXTENDED;
@@ -105,6 +117,7 @@ export function buildTuning(
     (m) => {
       setMode(params, m);
       getPhysarum()?.reset();
+      hooks.onBulk?.();
       refresh();
     },
     'Classic: the textbook rule, four numbers you set. Extended: agents adapt their sensing and movement to the trail under them, described by 15-number presets, with a pen region, waves and inertia. Switching resets the agents.',
@@ -116,9 +129,9 @@ export function buildTuning(
     text: `${CURATED_SLOTS.includes(slot) ? '* ' : ''}${slotLabel(slot)}`,
   }));
   extendedOnly.push(
-    select('background preset', slotOptions, () => params.backgroundPreset, (v) => (params.backgroundPreset = v),
+    select('background preset', slotOptions, () => params.backgroundPreset, (v) => { params.backgroundPreset = v; hooks.onEdit?.('backgroundPreset', v); },
       'The rules that apply everywhere except under the pen. Changing it eases over the transition time. A star marks curated presets.'),
-    select('pen preset', slotOptions, () => params.penPreset, (v) => (params.penPreset = v),
+    select('pen preset', slotOptions, () => params.penPreset, (v) => { params.penPreset = v; hooks.onEdit?.('penPreset', v); },
       'The rules that apply under the pen (the pointer). The pen and the background blend smoothly.'),
   );
 
@@ -135,7 +148,10 @@ export function buildTuning(
         spec.label,
         spec.options,
         () => params[spec.key],
-        (v) => (params[spec.key] = v),
+        (v) => {
+          params[spec.key] = v;
+          hooks.onEdit?.(spec.key, v);
+        },
         `${spec.hint} (one seed, developer machine; Kiwi to verify)`,
       );
       rows.push({ row: choiceRow, only: spec.only });
@@ -163,6 +179,7 @@ export function buildTuning(
     slider.addEventListener('input', () => {
       const ui = fromPosition(spec, Number(slider.value));
       params[spec.key] = spec.deg ? ui * RAD : ui;
+      hooks.onEdit?.(spec.key, params[spec.key]);
       out.textContent = ui.toFixed(decimals(spec.step)) + (spec.deg ? '°' : '');
     });
     // A slider that keeps focus would swallow the live keys, so let go after each drag.
@@ -180,6 +197,7 @@ export function buildTuning(
   buttons.className = 'tune-buttons';
   button(buttons, 'Defaults', () => {
     resetToDefaults(params);
+    hooks.onBulk?.();
     refresh();
   });
   button(buttons, 'Reset agents (R)', () => getPhysarum()?.reset());

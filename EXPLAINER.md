@@ -1,6 +1,6 @@
 # EXPLAINER
 
-How each part of the instrument works, in terms you can defend out loud. One section per agent family: Physarum (sections 1 and 2), flow followers (3) and the flock (4); section 5 covers how they are coupled and drawn as one picture.
+How each part of the instrument works, in terms you can defend out loud. One section per agent family: Physarum (sections 1 and 2), flow followers (3) and the flock (4); section 5 covers how they are coupled and drawn as one picture, and section 6 the scenes and the live instrument.
 
 **Status of the evidence:** "Measured" below means one run with seed 7 on the developer machine (one NVIDIA GPU), 900 steps (15 simulated seconds) after a reset unless stated. It is evidence, not proof, and Kiwi still verifies and owns the final wording of every prediction.
 
@@ -461,3 +461,89 @@ In a dev build (`npm run dev`), console:
 - `await __physarumSelfTest()` compares the GPU with the CPU references for every family and coupling (60 checks, 11 of them for M5).
 - `await __exp.couplingStats({flowToPhysarum: 0.5})` measures alignment with the field, crowding, closed cells, the trail under the boids and the family shares for any setting. `__exp.couplingSweep(key, values, set, opts)` does it for several values (background job, poll `window.__couplingSweep`).
 - `__physarum.params.palette = 3` (or the dropdown) switches the palette at once; `changeColour` 0 to 1 sets the tint.
+
+---
+
+## 6. Scenes and the live instrument
+
+Milestone M6. Code: `src/scenes/` (`types.ts`, `validate.ts`, `director.ts`, `keys.ts`, `storage.ts`, `scenes.json`), `src/cue.ts`, `src/help.ts`, `src/scene_tools.ts`. The three shipped scenes are PLACEHOLDERS: they exist to test the engine and are not the performer's content. This section is the draft of the "why this scene looks like this" explanation: it is in my vocabulary and **needs Kiwi's edit** so it ends up in his voice (canvas against score, brushes against keys).
+
+**Evidence:** "Measured" means seed 7 on one NVIDIA GPU, grid 1043 x 910. A "difference" is the mean absolute difference between two tone-mapped trail images (0 identical, 1 black against white) of two runs that differ in one input only. "Seen" means looked at in a screenshot.
+
+### The idea: a canvas, a score, brushes and keys
+
+The world is the canvas. A **scene** is a regime of that world, stored as data. The performer moves between scenes with **keys** (discrete: Space, B, 1 to 9) and shapes the current one with **brushes** (continuous: the pen, the wheel, the click, the stir). The performer never touches a raw parameter live. Every gesture moves many parameters together along curves written into the scene, and nothing happens on its own: no timer, no song position, no audio analysis starts or changes anything.
+
+### The live vocabulary (all of it)
+
+| Input | Meaning |
+|---|---|
+| Move the mouse | The pen: a circle around the pointer where the world runs its alternate state. What that is belongs to the scene (its `pen.description`) |
+| Wheel | The one macro axis, intensity. The scene turns it into two to four parameters. It also scales the pen from 0.75 to 1.35 of its size |
+| Left click | The accent: the scene's wave, burst or ring at the pointer, plus a surge of the pointer's force on boids and on the flow field that fades in about a second |
+| Hold the right button and move | Stir: your drag pushes the world inside the pen |
+| Space / B | Next / previous scene (they stop at the ends, no wrap) |
+| 1 to 9 | Jump to that scene (the current one again returns it to its default) |
+| F | Freeze: hold the picture, again to resume |
+| R | Reset: agents scatter, trail clears, same scene |
+| S (and Escape) | Safe mode: 35% of the agents, followers and boids, 60% resolution. Again to leave. It also resumes a frozen picture |
+| H / C | Help overlay / cue panel |
+
+Rehearsal only: T rehearsal panel, P song panel, D debug readout, V flow arrows, G flock overlay, Enter full screen.
+
+### What a scene contains
+
+| Field | What it is |
+|---|---|
+| `name`, `note` | A phrase to say out loud, and the performer's own words about the feeling (shown in the cue panel) |
+| `dominant` | Which family carries the scene's pen and movement (documentation; see DECISIONS M6 for what the word does not mean) |
+| `params` | The regime: any parameter by its panel name. Anything not named takes the default of the scene's agent rule, so entering a scene always lands on a fully defined state |
+| `pen` | `radius` at the middle of the wheel, and `description`: what the circle means in this scene |
+| `macro` | `entry` (the wheel value on entry), a one-sentence `description` of what turning it up and down does, the `entries` (parameter, value at wheel 0, value at wheel 1, curve), and an optional `returnSeconds` |
+| `accent` | `type` (wave, burst, ring), `strength`, `size` |
+| `entry` | `seconds`, `easing`, `burst` (none, ring, center), `switchAt` |
+
+### Transitions
+
+A scene key starts an eased blend from where the world is now to the scene. Continuous parameters interpolate (tested: nothing jumps at the press, nothing overshoots, blended parameters move one way only). Discrete ones switch once, at `switchAt`. The Physarum presets are pointed at the target at the start and ease themselves over the scene's time. The palette crossfades in the display. Counts interpolate, so families fade in and out. Two documented limits: a change of agent rule (classic to extended) is a hard cut with an agent reset; and pressing another scene key during a transition starts from the half-made state, with a palette crossfade in progress committed to the nearer palette. Measured: across the four switches among the three placeholders the largest single-step change of the mean trail is 0.28% to 0.82%, against 0.02% to 0.05% in steady state; the one with an entry burst (calm to dense, a ring on 10% of the agents) is 0.76% at the first step.
+
+### The three placeholder scenes (PLACEHOLDER content, for testing the engine)
+
+| Scene | Dominant | What the engine is exercising | Pen | Wheel (one sentence) | Accent | Entry |
+|---|---|---|---|---|---|---|
+| PLACEHOLDER: calm | Physarum | Preset 21, 600k agents, long decay, a light flow, Abyss palette | Wakes the network: a denser net inside the circle, the flow swirls | Up makes the network a little denser and the flow pull slightly harder, down lets it thin and drift (decay, flow to Physarum, agent count) | Wave | 1.5 s, smooth |
+| PLACEHOLDER: dense | Flock | Physarum and 30k boids on the veins, followers, Ember palette | Predator: the swarm parts around the circle | Up makes the swarm faster and tighter and brings more followers, down loosens and slows it (cohesion, speed, followers) | Burst | 1.2 s, smooth, ring burst |
+| PLACEHOLDER: scattered | Followers | 150k followers on a fast curl field, sparse Physarum, Tide palette | Repels the flow, leaving a quiet hole | Up churns the flow faster and lengthens the strokes, down calms it to slow curls (field evolution, follower speed, decay) | Ring | 2 s, smooth |
+
+### Does every live input make a measurable difference in every scene? (SPEC 8.8)
+
+Measured (final ranges):
+
+| Scene | Wheel 0 against 1 (difference) | Pen, inside / outside the circle | Accent, 30 steps after |
+|---|---|---|---|
+| calm | 0.23 (closed cells 358, 123, 70 at wheel 0, 0.5, 1) | 0.18 / 0.08 | wave 0.038 |
+| dense | 0.11 (cells 632, 979, 579; coverage 0.88, 0.81, 0.45) | 0.21 / 0.03 | burst 0.049 |
+| scattered | 0.24 (cells 70, 21, 27) | 0.21 / 0.05 | ring 0.038 |
+
+All differences are well above the 0.03 that I chose as "visible". The pen is local in dense (6 times) and scattered (4 times) but only 2.3 times in calm, where the flow swirl spreads its effect. The largest-energy family is the same at wheel 0, 0.5 and 1 in every scene. Stir was measured in M2 and is unchanged.
+
+### Predicted versus measured
+
+| Item | Predicted | Measured | Verdict |
+|---|---|---|---|
+| Wheel stays inside the scene's character | Yes, with narrow ranges | The first ranges did not: calm went from 1,327 to 9 closed cells, dense collapsed (coverage 0.85 to 0.05). After narrowing twice, wheel 0 and wheel 1 read as the same scene (seen) | The first prediction was wrong; the ranges were tuned until it held |
+| Pen is local (inside at least 3 times outside) | Every scene | Dense 6.2 times, scattered 4.2, calm 2.3 | Partly (a first test over 600 steps showed 2 times everywhere because the two worlds drift apart anyway; the method was changed) |
+| Accent visible, burst largest, wave smallest | Yes | 0.049 (burst), 0.038 (wave and ring) | Supported, barely distinct |
+| Transitions smooth (under 5% per step) | Yes | 0.28% to 0.82% | Supported |
+| Safe mode GPU saving | At least 2.5 times | 4.2 ms to 3.0 ms (about 30%) with 1M Physarum agents, 500k followers and 100k boids; no measurable change in a lighter scene (2.0 and 1.7 ms) | Wrong: on this GPU the cost is not mostly the agents. The saving is likely larger on a slower GPU (not verified) |
+
+### Performance and stability (this machine only)
+
+| Test | Result |
+|---|---|
+| Live loop, 60 s, real keyboard and pointer event paths: pointer circling, right-drag stir, clicks, wheel up and down, Space, B, 3 and 1 jumps, freeze for 0.6 s, safe mode on and off | 59 to 61 steps in every second except the one with the freeze (22 steps, as it should be). Worst GPU second 5.5 ms, JS heap 5.7 to 5.9 MB, no console errors |
+| Soak, 18,000 steps (5 simulated minutes, accelerated), a simulated performer with 15 scene switches, 75 wheel turns, 43 accents and a moving pen | 0 NaN, 0 out-of-range agents, boids or followers, trail finite, every counter equal to the scene's configured count at all 10 checks. Run with the first, wider wheel ranges; only the macro ranges changed afterwards |
+
+### How to verify
+
+In a dev build (`npm run dev`), console: `await __exp.sceneTest()` repeats the table above, `await __exp.transitionTest(0, 1)` measures one switch, `__exp.sceneSoak()` is the long run (poll `window.__sceneSoak`), `__director` is the director, `await __physarumSelfTest()` runs all 67 GPU checks. Editing `src/scenes/scenes.json` re-applies the scenes in the running page.

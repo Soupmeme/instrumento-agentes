@@ -356,3 +356,71 @@ The field cell count is needed by the Physarum shaders now. The field sampling f
 
 **Test method: two mutation checks with predicted failures.**
 (A) The shader's flow force halved: predicted that the three flow -> Physarum heading checks fail (classic weight 1 and 0.35, extended) and the weight-0, strength-0, trail -> boids, delayed-trail and all-on checks pass. Observed exactly that. (B) The CPU reference's gradient y sign flipped: predicted that only the two trail -> boids checks fail. Observed exactly that. The served code was checked each time. A side finding: the existing work-guard check's "guard must be engaged" margin (5x) was tight enough to fail when the flock shader gained code; it was loosened to 3x.
+
+## 2026-09-30, M6 scenes and the live instrument
+
+Predictions were written before measuring (below), following the workflow habits agreed after M4. The scene logic is pure TypeScript, so it was built and unit tested in Node first (25 tests), then wired to the GPU world.
+
+### Predictions and metrics
+Metrics (`__exp.sceneTest`, `transitionTest`, `sceneSoak`; seed 7; a "difference" is the mean absolute difference of two tone-mapped, 8 times downsampled trail images of two runs that differ in ONE input only, 0 = identical, 1 = black against white):
+- Wheel at 0 against 1 (600 steps), with trail mean, vein coverage, closed cells and the trail-energy share of each family.
+- Pen on against off, inside against outside the pen circle. Accent: click against no click, 30 steps later.
+- Transition: largest single-step relative change of the mean trail across a scene switch, against steady state. Steps per second through it.
+- Safe mode: GPU time per step, full against safe against after.
+- A live loop of 60 s that drives the real keyboard and pointer event paths.
+
+Predictions:
+1. Wheel: image difference at least 0.03 in every scene, one of mean, coverage or cells differs by at least 15%, and the largest-energy family is the same at wheel 0, 0.5 and 1.
+2. Pen: inside difference at least 0.03 and at least 3 times the outside difference, in every scene.
+3. Accent: at least 0.02 in every scene, largest for the burst scene, smallest for the wave scene.
+4. Transitions: no single step changes the mean trail by more than 5%, and 60 steps per second hold through every switch.
+5. Safe mode: GPU time falls by at least a factor of 2.5 and returns after leaving it.
+6. Live loop: 59 to 61 steps in every second, no validation errors, GPU total under 8 ms.
+
+### Decisions
+
+**A scene is data with the parameter names the code already uses; it is a complete regime because anything it does not name falls back to the defaults of its agent rule.**
+SPEC 8.3 suggests nested groups (physarum, flow, flock, coupling, look). That would need a translation layer for every parameter and would break the moment a parameter is added. `params` uses `PhysarumParams` names and units (angles in radians), validated against the tuning panel's ranges. The suggested group names live on as documentation (`dominant`) and in the rehearsal panel's groups. Scenes also carry: `pen` (radius and what it means), `macro` (wheel entries, entry value, a one-sentence description, optional return), `accent` (wave, burst or ring, strength, size) and `entry` (seconds, easing, entry burst, the moment discrete parameters switch). Not built: `world.boundary: contain` (the world always wraps) and `seeding` patterns beyond the entry burst; neither is needed by the placeholders.
+
+**The director is pure logic with a small host interface, so every rule is unit tested without a GPU.**
+It owns: the scene index, an eased transition, the wheel (target and smoothed value), the accent and the capture and import tools. Nothing in it runs on its own: with no input and no transition `update()` changes nothing (a test runs it for 2 simulated minutes), and a scene key is the only thing that starts a transition (CLAUDE.md rules 2 and 6). The one thing that moves without input is the optional slow return of the wheel (`macro.returnSeconds`, 0 by default, off in every placeholder), which SPEC 8.5 allows a scene to ask for.
+
+**Transitions blend numbers and switch discrete settings at one moment; the palette crossfades and the presets ease themselves.**
+Every continuous parameter interpolates between the state at the key press and the scene, so nothing jumps at the press and nothing overshoots (tested). Discrete ones (field kind, pen modes, physarum on) switch at `entry.switchAt` (default the middle). The Physarum presets are pointed at the target at the start with the scene's transition time as their own ease time (the world already blends them). The palette crossfades in the display through two extra uniforms, so there is no switch to hide. Agent, follower and boid counts interpolate, so a family fades in and out by count. Documented limits: (a) a different agent rule (classic against extended) is a hard cut with an agent reset, because the agents are different things; (b) pressing a scene key in the middle of a transition starts from the half-made state, and a palette crossfade in progress is committed to the nearer palette (a small visible step, only when the performer interrupts a transition); (c) boids and followers that slept inside a clump wake clumped (bounded by the work guard).
+
+**The wheel is one smoothed value, 0 to 1; the scene turns it into two to four parameters along curves and scales the pen.**
+Twelve notches cover the range; it glides over about 0.15 s so it never jumps; the pen radius scales from 0.75 to 1.35 of the scene's value. The value at entry is the scene's `macro.entry`. Parameters outside the scene's macro list stay where the rehearsal panel put them. The wheel replaced the temporary pen-size wheel of M2.
+
+**The accent is the scene's wave, burst or ring plus a surge of the pointer forces on every family.**
+Alternatives: only a Physarum wave (invisible in scenes whose dominant family is not Physarum), or a new shock-wave force on boids (new GPU code). The surge multiplies the pointer's weight on boids by up to 4 and raises the field edit toward full strength, then fades by itself in about a second (0.96 per step). A wave or burst only exists in the extended rule; in a classic scene the click still surges. `strength` also scales the burst size.
+
+**Keys: Space next, B previous, 1 to 9 jump, F freeze, R reset, S safe (and Escape), H help, C cue; rehearsal keys T, P, D, V, G, Enter.**
+B is the key under Space. A single press each, no modifier (Ctrl, Alt and Meta are ignored; Shift is only how a capital is typed), no key repeat. Next stops at the last scene and previous at the first (no wrap: a stray press at the end must not restart the piece). Pressing the number of the current scene re-enters it, which returns to its default. In full screen the browser keeps Escape to leave full screen, so S is the dependable safe key. The map is one pure function, tested: every action has one key (safe has two) and no live key is shared with a debug key. The earlier 'R' reset and debug keys are unchanged.
+
+**Safe mode drops the counts to 35% and the canvas to 60% and resumes a frozen picture; it is reversible.**
+Counts are scaled in the world (not by editing the scene), so leaving safe mode restores them exactly (a self-test checks both ways). Resuming a frozen picture is deliberate: the smaller canvas restarts the trail, which a frozen world could not redraw. The saving turned out to be modest (measured below). Quality presets (SPEC 9) are M8.
+
+**The cue panel shows the current and next scene, the song's elapsed time and the scene list; the clock only displays.**
+The time comes from the audio element (`Song.elapsed`) and shows `--:--` when there is no readable clock (nothing loaded, or a YouTube embed that has not played). Placeholder scenes carry a badge.
+
+**The help overlay is shown at load and generated from the key map, so it cannot disagree with the bindings.**
+It is the only instruction a new person gets. Whether it is enough for a person who has never seen the app is not something I can test alone (see LOGBOOK).
+
+**Rehearsal panel: edits belong to the current scene in memory; capture, export, import, autosave, hot reload, rehearse.**
+A slider edit goes to the current scene (so the next capture and the wheel agree with it). Capture overwrites the current scene or appends a new one that copies its pen, wheel, accent and entry settings. Export downloads all scenes as an editable JSON file; import validates it, clamps or drops bad values and lists them. Scenes are autosaved to localStorage (all access in try/catch) but never loaded by themselves: scenes.json starts the instrument, and "Restore autosave" is a button, so an old autosave can never silently override an edited scene file. "Rehearse: next scene" switches and lists what changes, biggest first. Hot reload (development server only) re-applies scenes.json when it is saved, without a transition or a reset. Vite only recognises the dependency accept at module level, and can hold two instances of the module, so the update travels as a window event.
+
+**Placeholder scenes: three, all extended rule, a different dominant family each, wheel ranges kept narrow.**
+The first wheel ranges were too wide (see Findings) and were narrowed twice. All are marked `placeholder: true`, named "PLACEHOLDER: ...", and say so in their notes. They stay inside the safe ranges found in M4 and M5 (a test checks cohesion below separation, trail to boids at most 1.5, flow steering at most 0.6, counts within the limits). They are not final tuning and they are not Kiwi's content.
+
+**The self-test now starts from the default parameters, not from the live scene.**
+With a scene live, its flow steering (0.25) legitimately bent the agents and 13 older checks failed. The checks compare the GPU with the plain rules, so they must not inherit a scene.
+
+### Findings that changed the design
+1. The first wheel ranges left the scene's character: in the calm scene the wheel went from 1,327 closed cells to 9, and in the dense scene it collapsed the network (coverage 0.85 to 0.05). Ranges narrowed (calm: decay 0.78 to 0.82, flow 0.1 to 0.22, agents 520k to 660k; dense: cohesion 0.4 to 0.9, speed 2 to 3, followers 40k to 90k; scattered: evolution 0.08 to 0.45). Judged by eye at wheel 0 and 1 after settling.
+2. The first pen test was not local: over 600 steps the two worlds drift apart anyway (chaotic dynamics), so "outside" was about half of "inside". The pen and accent are now compared from a warm world: 500 steps without the input, then 90 or 30 with it, against the identical run without.
+3. The scene's `dominant` label and the measured trail energy disagree in the dense scene: it is labelled flock, but Physarum holds 57 to 62% of the energy and the boids 13 to 28%. The label says which family carries the scene's pen and movement, not which one is brightest. The cue panel does not show it, so nothing misleads at performance time, but the word needs a better definition when real scenes arrive.
+4. Safe mode saves about 30% of GPU time, not the 2.5 times predicted.
+5. A palette crossfade interrupted by another scene key would have jumped through three palettes; it now commits to the nearer one (tested).
+
+### Test method
+Two mutation checks with predicted failures on the director: (D1) the wheel's interpolation with min and max swapped: predicted and observed that only "the wheel drives the macro parameters along their curves" fails. (D2) the transition easing reversed: predicted and observed that only "no parameter overshoots ... blended ones move one way only" fails. The GPU-side hooks (count scale, surge, spawn fraction) have 7 self-test checks.

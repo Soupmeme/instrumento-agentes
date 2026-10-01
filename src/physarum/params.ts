@@ -100,6 +100,9 @@ export interface PhysarumParams {
   palette: number;
   /** Display only: how strongly growing or fading trail tints the colour, 0..1. */
   changeColour: number;
+  /** Display only: the palette being faded toward during a scene transition, and how far along (0 = all `palette`). */
+  paletteB: number;
+  paletteMix: number;
 }
 
 export const DEFAULT_PARAMS: Readonly<PhysarumParams> = {
@@ -148,6 +151,8 @@ export const DEFAULT_PARAMS: Readonly<PhysarumParams> = {
   trailToBoids: 0,
   palette: 0,
   changeColour: 0.5,
+  paletteB: 0,
+  paletteMix: 0,
 };
 
 /**

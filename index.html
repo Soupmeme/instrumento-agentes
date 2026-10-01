@@ -41,12 +41,21 @@
       </p>
     </details>
     <p class="keys">
-      <kbd>Enter</kbd> fullscreen &nbsp; <kbd>D</kbd> debug HUD &nbsp; <kbd>P</kbd> this panel &nbsp; <kbd>T</kbd> tuning &nbsp; <kbd>R</kbd> reset &nbsp; <kbd>V</kbd> field arrows &nbsp; <kbd>G</kbd> flock overlay
+      <kbd>H</kbd> help &nbsp; <kbd>C</kbd> cue panel &nbsp; <kbd>T</kbd> rehearsal panel &nbsp; <kbd>P</kbd> this panel &nbsp; <kbd>Enter</kbd> fullscreen
     </p>
   </section>
 
-  <!-- Tuning panel: toggled with T. Rehearsal and defense tool, never part of a performance. -->
+  <!-- Rehearsal panel: toggled with T. Every parameter, scene capture, export and import. Never part of a performance. -->
   <aside id="tuning" hidden></aside>
+
+  <!-- Cue panel: toggled with C. Current and next scene, the song's clock (display only), the scene list. -->
+  <aside id="cue" hidden></aside>
+
+  <!-- Help overlay: shown at load, toggled with H. The whole live vocabulary. -->
+  <div id="help"></div>
+
+  <!-- FROZEN and SAFE MODE badges (they only exist while the state is on). -->
+  <div id="badge" hidden></div>
 
   <!-- Fatal or recoverable messages (no WebGPU, device lost). -->
   <div id="message" hidden></div>

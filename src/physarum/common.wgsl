@@ -1,6 +1,6 @@
 // Shared by every Physarum shader (prepended as text, WGSL has no includes).
 
-// Mirrors the uniform buffer written by Physarum.writeParams. All scalars, 24 fields = 96 bytes.
+// Mirrors the uniform buffer written by Physarum.writeParams. All scalars, 26 fields = 104 bytes.
 struct Params {
   width: u32,          // simulation grid size in pixels
   height: u32,
@@ -26,6 +26,8 @@ struct Params {
   palette: u32,         // colour palette index (display only)
   changeGain: f32,      // how strongly growing or fading trail tints the colour (display only)
   vignette: f32,        // edge darkening, 0 = none (display only)
+  paletteB: u32,        // palette being faded toward during a scene transition (display only)
+  paletteMix: f32,      // 0 = all `palette`, 1 = all `paletteB` (display only)
 }
 
 // One agent. pos is NORMALISED (0..1 across the world) so the simulation grid can be resized

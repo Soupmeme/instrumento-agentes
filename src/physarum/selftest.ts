@@ -13,6 +13,8 @@
 //      CPU steering rule using the GPU's own field as data (so it isolates the steering and the
 //      interpolation from the noise); plus counter sum, no NaN, speed cap and determinism.
 //   7. Flock: grid, boid step and health checks (see src/flock/selftest_flock.ts).
+//   9. Scene hooks: safe mode's count scale, the accent's surge, the spawn fraction (see
+//      src/scenes/selftest_scenes.ts).
 //   8. Coupling: flow -> Physarum (classic and extended), trail -> boids, the delayed trail, and
 //      everything on at once (see src/coupling/selftest_coupling.ts).
 //   5. Extended mode (36 Points rule): controlled agents on a hand-built trail are stepped once
@@ -28,10 +30,11 @@
 import type { Physarum } from './physarum';
 import { sensorCell, stepAgent, wrap, type AgentState, type StepParams } from './reference.ts';
 import { extendedValues, mixVectors, pixelScaleFor, stepAgentExtended } from './extended.ts';
-import { MODE_CLASSIC, MODE_EXTENDED, modeDefaults } from './params';
+import { DEFAULT_PARAMS, MODE_CLASSIC, MODE_EXTENDED, modeDefaults } from './params';
 import { presetOfSlot } from './presets';
 import { flockChecks } from '../flock/selftest_flock';
 import { couplingChecks } from '../coupling/selftest_coupling';
+import { sceneHookChecks } from '../scenes/selftest_scenes';
 import { fieldVector, stepFollower, KIND_NOISE_ANGLE, KIND_CURL, PEN_NONE, PEN_SWIRL, type FieldConfig, type FollowerConfig } from '../flow/flowfield.ts';
 
 export interface SelfTestResult {
@@ -65,6 +68,11 @@ async function runChecks(p: Physarum): Promise<SelfTestResult> {
   const check = (name: string, ok: boolean, detail = '') => checks.push({ name, ok, detail });
 
   const saved = { ...p.params };
+  const savedScale = p.countScale;
+  // Start from the defaults, not from whatever scene is live: the checks compare the GPU with the
+  // plain rules, and a scene's couplings and counts would bend them (found in M6).
+  Object.assign(p.params, DEFAULT_PARAMS);
+  p.countScale = 1;
   const W = p.gridWidth;
   const H = p.gridHeight;
 
@@ -137,7 +145,7 @@ async function runChecks(p: Physarum): Promise<SelfTestResult> {
 
   // ---- 2 and 3. Counter invariant and health, with the real agent count ----
   const N = 100_000;
-  Object.assign(p.params, saved, { mode: MODE_CLASSIC, physarumOn: 1, followerCount: 0, agentCount: N });
+  Object.assign(p.params, DEFAULT_PARAMS, { mode: MODE_CLASSIC, physarumOn: 1, followerCount: 0, agentCount: N });
   p.reset(1234);
   for (let i = 0; i < 5; i++) p.step();
 
@@ -196,8 +204,12 @@ async function runChecks(p: Physarum): Promise<SelfTestResult> {
   // ---- 8. Coupling and the delayed trail ----
   checks.push(...(await couplingChecks(p)));
 
+  // ---- 9. World hooks used by the scene system ----
+  checks.push(...(await sceneHookChecks(p)));
+
   // Leave the instrument as we found it, with a fresh random start.
   Object.assign(p.params, saved);
+  p.countScale = savedScale;
   p.reset();
 
   return {
