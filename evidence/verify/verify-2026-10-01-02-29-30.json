@@ -1,0 +1,113 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-01T02:29:30.667Z",
+  "done": 3,
+  "total": 3,
+  "current": "SC-03",
+  "results": [
+    {
+      "id": "SC-01",
+      "family": "scenes",
+      "change": "the wheel, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 17.8,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "wheelDifference": 0.229,
+            "dominant": [
+              "physarum",
+              "physarum",
+              "physarum"
+            ]
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "wheelDifference": 0.107,
+            "dominant": [
+              "physarum",
+              "physarum",
+              "physarum"
+            ]
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "wheelDifference": 0.239,
+            "dominant": [
+              "followers",
+              "followers",
+              "followers"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-02",
+      "family": "scenes",
+      "change": "the pen, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "inside": 0.183,
+            "outside": 0.079
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "inside": 0.212,
+            "outside": 0.034
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "inside": 0.212,
+            "outside": 0.051
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-03",
+      "family": "scenes",
+      "change": "the click, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "type": "wave",
+            "difference": 0.038
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "type": "burst",
+            "difference": 0.049
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "type": "ring",
+            "difference": 0.038
+          }
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "failedIds": []
+  },
+  "adapter": "",
+  "grid": [
+    1043,
+    910
+  ],
+  "seed": 7
+}

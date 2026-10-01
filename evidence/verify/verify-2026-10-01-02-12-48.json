@@ -1,0 +1,655 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-01T02:12:48.762Z",
+  "done": 37,
+  "total": 37,
+  "current": "TL-05",
+  "results": [
+    {
+      "id": "PC-01",
+      "family": "physarum-classic",
+      "change": "trail decay 0.6 to 0.97",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.6,
+      "values": {
+        "trailMax": [
+          0.2843,
+          4.0833
+        ],
+        "maxRatio": 14.4,
+        "corr1s": [
+          0.25,
+          0.866
+        ],
+        "corrGain": 0.616
+      }
+    },
+    {
+      "id": "PC-02",
+      "family": "physarum-classic",
+      "change": "sensor distance 16 to 48",
+      "origin": "earlier",
+      "pass": false,
+      "seconds": 0.6,
+      "values": {
+        "coverage": [
+          0.119,
+          0.154
+        ],
+        "ratio": 1.29
+      }
+    },
+    {
+      "id": "PC-03",
+      "family": "physarum-classic",
+      "change": "sensor distance 16 to 4",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.5,
+      "values": {
+        "cells": [
+          20,
+          49
+        ],
+        "ratio": 0.41
+      }
+    },
+    {
+      "id": "PC-04",
+      "family": "physarum-classic",
+      "change": "sensor angle 15 to 90 degrees",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.5,
+      "values": {
+        "fracTurning": [
+          0.611,
+          0.088
+        ],
+        "ratio": 0.14
+      }
+    },
+    {
+      "id": "PC-05",
+      "family": "physarum-classic",
+      "change": "turn angle 15, 45, 90 degrees",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.7,
+      "values": {
+        "meanTurnDeg": [
+          2.9,
+          10.4,
+          38.4
+        ],
+        "ratio90to15": 13.2
+      }
+    },
+    {
+      "id": "PC-06",
+      "family": "physarum-classic",
+      "change": "respawn rate 0 against 0.01, over 100 simulated seconds",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 2.4,
+      "values": {
+        "cellsRespawn0": [
+          32,
+          6
+        ],
+        "cellsRespawn001": [
+          143,
+          122
+        ],
+        "kept0": 0.19,
+        "kept001": 0.85
+      }
+    },
+    {
+      "id": "PC-07",
+      "family": "physarum-classic",
+      "change": "deposit 1 to 2",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.4,
+      "values": {
+        "agentsDifferingAtX2": 0,
+        "agentsDifferingAtX8": 0,
+        "trailValuesNotExactlyDoubledAtX2": 0
+      }
+    },
+    {
+      "id": "PC-08",
+      "family": "physarum-classic",
+      "change": "display gain, palette, change tint (all display only)",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.3,
+      "values": {
+        "hashGain2Palette0Tint0": 1995672450,
+        "hashGain20Palette3Tint1": 1995672450
+      }
+    },
+    {
+      "id": "PC-09",
+      "family": "physarum-classic",
+      "change": "agent count 50,000 to 400,000",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.5,
+      "values": {
+        "cells": [
+          25,
+          49
+        ],
+        "ratio": 1.96
+      }
+    },
+    {
+      "id": "PC-10",
+      "family": "physarum-classic",
+      "change": "move distance 1.5 to 4",
+      "origin": "new",
+      "pass": true,
+      "seconds": 0.5,
+      "values": {
+        "meanDisplacement": [
+          1.5,
+          4
+        ],
+        "ratio": 2.67,
+        "expected": 2.67
+      }
+    },
+    {
+      "id": "PC-11",
+      "family": "physarum-classic",
+      "change": "seed",
+      "origin": "new",
+      "pass": true,
+      "seconds": 0.4,
+      "values": {
+        "seed7": 1995672450,
+        "seed7again": 1995672450,
+        "seed8": 1017354863
+      }
+    },
+    {
+      "id": "PE-01",
+      "family": "physarum-extended",
+      "change": "background preset, each of the 8 curated slots",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 6.9,
+      "values": {
+        "slots": [
+          0,
+          2,
+          4,
+          13,
+          14,
+          15,
+          19,
+          21
+        ],
+        "coverageAfter45s": [
+          0.762,
+          0.43,
+          0.313,
+          0.355,
+          0.654,
+          0.53,
+          0.344,
+          0.349
+        ]
+      }
+    },
+    {
+      "id": "PE-02",
+      "family": "physarum-extended",
+      "change": "the pen (second preset under the pointer)",
+      "origin": "earlier",
+      "pass": false,
+      "seconds": 0.4,
+      "values": {
+        "insideDifference": 0.057,
+        "outsideDifference": 0.024,
+        "ratio": 2.3
+      },
+      "note": "warm start: 500 steps without the pen, then 90 steps with and without it"
+    },
+    {
+      "id": "PE-03",
+      "family": "physarum-extended",
+      "change": "preset transitions (4 pairs of curated presets)",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 4.8,
+      "values": {
+        "pairs": [
+          "15 -> 21",
+          "14 -> 19",
+          "0 -> 4",
+          "21 -> 2"
+        ],
+        "reachedTarget": [
+          1.16,
+          0.85,
+          1.07,
+          1
+        ],
+        "blankDuring": [
+          false,
+          false,
+          false,
+          false
+        ]
+      }
+    },
+    {
+      "id": "PE-04",
+      "family": "physarum-extended",
+      "change": "click: a wave",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 1.4,
+      "values": {
+        "correlationAt3s": 0.188,
+        "coverageAfterOverNoWave": 0.98
+      }
+    },
+    {
+      "id": "PE-05",
+      "family": "physarum-extended",
+      "change": "right-drag: stir",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0,
+      "values": {
+        "meanDxWithStir": 93.1,
+        "meanDxWithout": -0.07
+      }
+    },
+    {
+      "id": "PE-06",
+      "family": "physarum-extended",
+      "change": "ring burst",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0,
+      "values": {
+        "ringBandBefore": 0.015,
+        "ringBandAfter": 0.1134,
+        "rise": 0.0984,
+        "requested": 0.1
+      }
+    },
+    {
+      "id": "PE-07",
+      "family": "physarum-extended",
+      "change": "inertia 0 to 1",
+      "origin": "new",
+      "pass": true,
+      "seconds": 0.4,
+      "values": {
+        "meanDirectionChangeDeg": [
+          10.53,
+          4.79
+        ],
+        "ratio": 0.46,
+        "agents": [
+          299380,
+          298992
+        ]
+      }
+    },
+    {
+      "id": "FO-01",
+      "family": "followers",
+      "change": "follower max force 0.02, 0.12, 1",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.5,
+      "values": {
+        "alignmentAtForce002_012_1": [
+          0.663,
+          0.975,
+          0.999
+        ]
+      }
+    },
+    {
+      "id": "FO-02",
+      "family": "followers",
+      "change": "follower max speed 2.5 to 6",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.3,
+      "values": {
+        "alignmentAtSpeed2_5_6": [
+          0.975,
+          0.625
+        ],
+        "drop": 0.35
+      }
+    },
+    {
+      "id": "FO-03",
+      "family": "followers",
+      "change": "look-ahead 10 to 30 steps",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.3,
+      "values": {
+        "alignmentAtLookahead10_30": [
+          0.964,
+          0.453
+        ]
+      }
+    },
+    {
+      "id": "FO-04",
+      "family": "followers",
+      "change": "field strength 0.5 to 1",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.3,
+      "values": {
+        "meanSpeedOfMax": [
+          0.468,
+          0.917
+        ],
+        "ratio": 0.51
+      }
+    },
+    {
+      "id": "FO-05",
+      "family": "followers",
+      "change": "noise frequency 1.5, 3, 8 per screen height",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.5,
+      "values": {
+        "meanTurnDegAtFrequency1_5_3_8": [
+          0.79,
+          1.55,
+          2.67
+        ]
+      }
+    },
+    {
+      "id": "FO-06",
+      "family": "followers",
+      "change": "pen swirl, attract, repel",
+      "origin": "earlier",
+      "pass": false,
+      "seconds": 0.5,
+      "values": {
+        "swirlCirculation": 0.794,
+        "attractInward": -0.792,
+        "insidePenWithoutEdit": 10576,
+        "insidePenRepel": 10631,
+        "repelOverNone": 1.01
+      }
+    },
+    {
+      "id": "FO-07",
+      "family": "followers",
+      "change": "field drift 0 to 0.08",
+      "origin": "earlier",
+      "pass": false,
+      "seconds": 0.3,
+      "values": {
+        "stalledShareAtDrift0": 0.132,
+        "stalledShareAtDrift008": 0.024
+      }
+    },
+    {
+      "id": "FO-08",
+      "family": "followers",
+      "change": "follower respawn 0 to 0.01 (noise-angle field, which has sinks)",
+      "origin": "new",
+      "pass": true,
+      "seconds": 0.4,
+      "values": {
+        "shareInMostCrowdedPercentAtRespawn0": 1,
+        "atRespawn001": 0.459
+      }
+    },
+    {
+      "id": "CP-01",
+      "family": "coupling",
+      "change": "flow to Physarum 0, 0.25, 1",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 1.1,
+      "values": {
+        "alignmentAtFlow0_025_1": [
+          -0.046,
+          0.244,
+          0.787
+        ]
+      }
+    },
+    {
+      "id": "CP-02",
+      "family": "coupling",
+      "change": "flow to Physarum 0 to 1",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0.7,
+      "values": {
+        "cellsAtFlow0_1": [
+          76,
+          12
+        ],
+        "ratio": 0.16
+      }
+    },
+    {
+      "id": "CP-03",
+      "family": "coupling",
+      "change": "trail to boids 0 to 1",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 3.9,
+      "values": {
+        "enrichmentAtTrail0_1": [
+          1.35,
+          1.47
+        ]
+      }
+    },
+    {
+      "id": "CP-04",
+      "family": "coupling",
+      "change": "trail to boids 1.5 to 1.75",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 21,
+      "values": {
+        "nearestAt1": 4.32,
+        "nearestAt175": 0.72,
+        "enrichmentAt175": 45.83
+      }
+    },
+    {
+      "id": "SC-01",
+      "family": "scenes",
+      "change": "the wheel, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 9,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "wheelDifference": 0.229,
+            "dominant": [
+              "physarum",
+              "physarum",
+              "physarum"
+            ]
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "wheelDifference": 0.085,
+            "dominant": [
+              "physarum",
+              "physarum",
+              "physarum"
+            ]
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "wheelDifference": 0.239,
+            "dominant": [
+              "followers",
+              "followers",
+              "followers"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-02",
+      "family": "scenes",
+      "change": "the pen, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "inside": 0.183,
+            "outside": 0.079
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "inside": 0.212,
+            "outside": 0.034
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "inside": 0.212,
+            "outside": 0.051
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-03",
+      "family": "scenes",
+      "change": "the click, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "type": "wave",
+            "difference": 0.038
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "type": "burst",
+            "difference": 0.049
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "type": "ring",
+            "difference": 0.038
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-05",
+      "family": "scenes",
+      "change": "a scene key (Space, B, 1 to 9)",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 12,
+      "values": {
+        "largestStepChangeOfMeanTrail": [
+          0.0076,
+          0.0138,
+          0.0081
+        ]
+      }
+    },
+    {
+      "id": "TL-03",
+      "family": "tools",
+      "change": "the buffer views (O)",
+      "origin": "new",
+      "pass": true,
+      "seconds": 0.3,
+      "values": {
+        "plain": 625378293,
+        "withOverlaysAndViews": 625378293,
+        "viewModesVisited": 5
+      }
+    },
+    {
+      "id": "TL-04",
+      "family": "tools",
+      "change": "the sweep tool",
+      "origin": "new",
+      "pass": true,
+      "seconds": 0.2,
+      "values": {
+        "files": [
+          "decay_0.8_t200.png",
+          "decay_0.95_t200.png"
+        ],
+        "identical": true,
+        "valuesDifferFromEachOther": true
+      }
+    },
+    {
+      "id": "TL-05",
+      "family": "tools",
+      "change": "the probe compiled into the agent pass",
+      "origin": "new",
+      "pass": false,
+      "seconds": 0.7,
+      "values": {
+        "msPerStepOff": [
+          0.349,
+          0.361,
+          0.361,
+          0.381
+        ],
+        "msPerStepOn": [
+          0.356,
+          0.357,
+          0.383,
+          0.388
+        ],
+        "medianChange": 0.061
+      }
+    }
+  ],
+  "summary": {
+    "passed": 32,
+    "failed": 5,
+    "failedIds": [
+      "PC-02",
+      "PE-02",
+      "FO-06",
+      "FO-07",
+      "TL-05"
+    ]
+  },
+  "adapter": "",
+  "grid": [
+    1043,
+    910
+  ],
+  "seed": 7
+}

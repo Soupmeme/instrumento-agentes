@@ -1,0 +1,35 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-01T02:25:06.840Z",
+  "done": 1,
+  "total": 1,
+  "current": "TL-06",
+  "results": [
+    {
+      "id": "TL-06",
+      "family": "tools",
+      "change": "a reset after an accent",
+      "origin": "new",
+      "pass": false,
+      "seconds": 0.4,
+      "values": {
+        "clean": 1077741217,
+        "afterAccent": 1469833209,
+        "surgeLeftAfterReset": 1
+      }
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 1,
+    "failedIds": [
+      "TL-06"
+    ]
+  },
+  "adapter": "",
+  "grid": [
+    1043,
+    910
+  ],
+  "seed": 7
+}

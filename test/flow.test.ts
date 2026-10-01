@@ -31,7 +31,7 @@ test('withLength sets the length exactly; a zero vector stays zero', () => {
   nearVec(withLength([0, 0], 10), [0, 0]);
 });
 
-test('steer = limit(desired - velocity, maxForce)', () => {
+test('[FO-10] steer = limit(desired - velocity, maxForce)', () => {
   // small difference: the force IS the difference
   nearVec(steerToward([1, 0], [0.9, 0], 0.5), [0.1, 0]);
   // large difference: capped at maxForce, in the direction of (desired - velocity)
@@ -66,7 +66,7 @@ test('an agent cannot turn instantly: maxForce limits how fast the heading chang
   assert.ok(length(vel) <= 2 + 1e-9, 'never exceeds maxSpeed');
 });
 
-test('speed is capped even when the steering force would exceed it', () => {
+test('[FO-10] speed is capped even when the steering force would exceed it', () => {
   const s = stepVehicle([0, 0], [1.9, 0], [100, 0], 2, 5);
   near(length(s.vel), 2);
 });

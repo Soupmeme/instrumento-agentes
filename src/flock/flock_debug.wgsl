@@ -3,7 +3,7 @@
 //
 // It draws, over the picture:
 //   * the spatial grid (cells at least as wide as the largest radius)
-//   * for boid 0 (the selected boid): its separation circle (red), its neighbour circle (green)
+//   * for the selected boid (the one nearest the pointer when G was pressed): its separation circle (red), its neighbour circle (green)
 //     and the edges of its view cone, with the visible part of the neighbour circle tinted
 //   * every boid as a small dot: the selected boid white, the boids it counts for separation
 //     red, the boids it counts for alignment and cohesion green, all others dim.
@@ -12,7 +12,7 @@
 
 @group(0) @binding(0) var<uniform> flock: Flock;
 @group(0) @binding(1) var<storage, read> boids: array<vec4f>;
-@group(0) @binding(2) var<uniform> dbg: vec4f; // canvas width and height in pixels
+@group(0) @binding(2) var<uniform> dbg: vec4f; // canvas width and height in pixels, then the index of the selected boid
 
 fn worldSize() -> vec2f { return vec2f(f32(flock.gridW), f32(flock.gridH)); }
 
@@ -23,7 +23,7 @@ fn wrapOffset(a: vec2f, b: vec2f) -> vec2f {
   return d;
 }
 
-// How the selected boid (boid 0) counts a point at offset `off`? 0 not at all, 1 for separation, 2 for alignment and cohesion.
+// How the selected boid counts a point at offset `off`? 0 not at all, 1 for separation, 2 for alignment and cohesion.
 fn relation(off: vec2f, vel: vec2f) -> u32 {
   let d2 = dot(off, off);
   let speed = length(vel);
@@ -56,7 +56,7 @@ fn fsGrid(@builtin(position) frag: vec4f) -> @location(0) vec4f {
   if (min(lineDist.x, lineDist.y) < 0.6 * px) { colour = vec4f(0.6, 0.7, 1.0, 0.22); }
 
   // The selected boid's perception.
-  let me = boids[0];
+  let me = boids[u32(dbg.z)];
   let off = wrapOffset(me.xy * size, world);
   let d = length(off);
   let vel = me.zw;
@@ -92,11 +92,11 @@ fn vsBoid(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> B
   let c = corners[vi];
   let b = boids[ii];
   let size = worldSize();
-  let me = boids[0];
+  let me = boids[u32(dbg.z)];
 
   var colour = vec4f(0.55, 0.65, 0.9, 0.35);
   var radius = 2.0;
-  if (ii == 0u) {
+  if (ii == u32(dbg.z)) {
     colour = vec4f(1.0, 1.0, 1.0, 1.0);
     radius = 5.0;
   } else {

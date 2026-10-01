@@ -1,0 +1,96 @@
+{
+  "tool": "sweepShots",
+  "label": "PC-02-03-sensor-distance",
+  "key": "sensorDistance",
+  "values": [
+    4,
+    16,
+    48
+  ],
+  "times": [
+    900
+  ],
+  "seed": 7,
+  "screenshot": {
+    "width": 400,
+    "height": 349
+  },
+  "grid": {
+    "width": 1043,
+    "height": 910
+  },
+  "adapter": "",
+  "parameters": {
+    "mode": 0,
+    "backgroundPreset": 21,
+    "penPreset": 4,
+    "penRadius": 0.25,
+    "inertia": 0,
+    "presetSeconds": 0.5,
+    "physarumOn": 1,
+    "followerCount": 0,
+    "followerSpeed": 2.5,
+    "followerForce": 0.12,
+    "followerLookahead": 0,
+    "followerRespawn": 0.002,
+    "followerDeposit": 0.05,
+    "flockCount": 0,
+    "flockSpeed": 2.5,
+    "flockForce": 0.08,
+    "flockSepWeight": 2,
+    "flockAliWeight": 1.5,
+    "flockCohWeight": 0.6,
+    "flockSepRadius": 12,
+    "flockNbrRadius": 40,
+    "flockFov": 4.71238898038469,
+    "flockPenMode": 2,
+    "flockPenStrength": 4,
+    "boidDeposit": 0.15,
+    "fieldKind": 0,
+    "fieldFrequency": 3,
+    "fieldEvolution": 0.08,
+    "fieldQuantSteps": 0,
+    "fieldStrength": 1,
+    "penFieldMode": 1,
+    "penFieldStrength": 0.9,
+    "agentCount": 400000,
+    "sensorDistance": 16,
+    "sensorAngle": 0.7853981633974483,
+    "rotationAngle": 0.7853981633974483,
+    "moveDistance": 1.5,
+    "decay": 0.9,
+    "depositFactor": 0.05,
+    "respawnRate": 0.001,
+    "displayGain": 6,
+    "flowToPhysarum": 0,
+    "trailToBoids": 0,
+    "palette": 0,
+    "changeColour": 0.5,
+    "paletteB": 0,
+    "paletteMix": 0
+  },
+  "note": "Each file is the real display of that value after that many steps from the seed; parameters lists the defaults and the overrides, and the swept key takes each of values.",
+  "shots": [
+    {
+      "value": 4,
+      "step": 900,
+      "file": "sensorDistance_4_t900.png",
+      "bytes": 309737,
+      "sha256": "3b05fc034510a448f08ce4297ccecc36ddda8651c45987bf2918e28155fe947e"
+    },
+    {
+      "value": 16,
+      "step": 900,
+      "file": "sensorDistance_16_t900.png",
+      "bytes": 316338,
+      "sha256": "ef00d317d0ea6d5cc8b61081ea1594cc1271766be71e7f924c677080b8b922ff"
+    },
+    {
+      "value": 48,
+      "step": 900,
+      "file": "sensorDistance_48_t900.png",
+      "bytes": 325455,
+      "sha256": "32bb6252a7b5fbd6c70d158b4b1c2401fd155366534c971a5560ec67265ac826"
+    }
+  ]
+}

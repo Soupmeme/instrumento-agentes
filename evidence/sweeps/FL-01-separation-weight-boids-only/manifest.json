@@ -1,0 +1,96 @@
+{
+  "tool": "sweepShots",
+  "label": "FL-01-separation-weight-boids-only",
+  "key": "flockSepWeight",
+  "values": [
+    0,
+    2,
+    4
+  ],
+  "times": [
+    600
+  ],
+  "seed": 7,
+  "screenshot": {
+    "width": 400,
+    "height": 349
+  },
+  "grid": {
+    "width": 1043,
+    "height": 910
+  },
+  "adapter": "",
+  "parameters": {
+    "mode": 0,
+    "backgroundPreset": 21,
+    "penPreset": 4,
+    "penRadius": 0.25,
+    "inertia": 0,
+    "presetSeconds": 0.5,
+    "physarumOn": 0,
+    "followerCount": 0,
+    "followerSpeed": 2.5,
+    "followerForce": 0.12,
+    "followerLookahead": 0,
+    "followerRespawn": 0.002,
+    "followerDeposit": 0.05,
+    "flockCount": 10000,
+    "flockSpeed": 2.5,
+    "flockForce": 0.08,
+    "flockSepWeight": 2,
+    "flockAliWeight": 1.5,
+    "flockCohWeight": 0.6,
+    "flockSepRadius": 12,
+    "flockNbrRadius": 40,
+    "flockFov": 4.71238898038469,
+    "flockPenMode": 0,
+    "flockPenStrength": 4,
+    "boidDeposit": 0.15,
+    "fieldKind": 0,
+    "fieldFrequency": 3,
+    "fieldEvolution": 0.08,
+    "fieldQuantSteps": 0,
+    "fieldStrength": 1,
+    "penFieldMode": 1,
+    "penFieldStrength": 0.9,
+    "agentCount": 400000,
+    "sensorDistance": 16,
+    "sensorAngle": 0.7853981633974483,
+    "rotationAngle": 0.7853981633974483,
+    "moveDistance": 1.5,
+    "decay": 0.9,
+    "depositFactor": 0.05,
+    "respawnRate": 0.001,
+    "displayGain": 6,
+    "flowToPhysarum": 0,
+    "trailToBoids": 0,
+    "palette": 0,
+    "changeColour": 0.5,
+    "paletteB": 0,
+    "paletteMix": 0
+  },
+  "note": "Each file is the real display of that value after that many steps from the seed; parameters lists the defaults and the overrides, and the swept key takes each of values.",
+  "shots": [
+    {
+      "value": 0,
+      "step": 600,
+      "file": "flockSepWeight_0_t600.png",
+      "bytes": 68066,
+      "sha256": "98f5384401becd1629543c7b090216d0a8bc3ebe8c6eb375a40146dd06c45599"
+    },
+    {
+      "value": 2,
+      "step": 600,
+      "file": "flockSepWeight_2_t600.png",
+      "bytes": 219063,
+      "sha256": "302843aaf289e83380a5c4d42e1d931c4651403e1a2cedc389b4408b77df9581"
+    },
+    {
+      "value": 4,
+      "step": 600,
+      "file": "flockSepWeight_4_t600.png",
+      "bytes": 297426,
+      "sha256": "40b618e80b6a4d438799fc80816680dc1e1e510e3e2fa7f86f9285758b15781b"
+    }
+  ]
+}

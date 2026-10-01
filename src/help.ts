@@ -43,7 +43,9 @@ export function buildHelp(el: HTMLElement): void {
   row(rehearsal, 'T', 'rehearsal panel: every parameter, scene capture, export and import');
   row(rehearsal, 'D', 'debug readout (frame time, agent counts)');
   row(rehearsal, 'P', 'show or hide the song panel');
-  row(rehearsal, 'V / G', 'flow field arrows / flock overlay');
+  row(rehearsal, 'V / G', 'flow field arrows / flock overlay (the boid nearest the pointer)');
+  row(rehearsal, 'A', 'sensors of the Physarum agent nearest the pointer, and what it decided');
+  row(rehearsal, 'O', 'buffer views: trail, delayed trail, change, agents per pixel');
   row(rehearsal, 'Enter', 'full screen');
 
   const start = document.createElement('p');

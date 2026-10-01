@@ -5,7 +5,7 @@
 // R reset, S safe mode (Escape too, when the browser passes it on: in full screen the browser
 // keeps Escape for leaving full screen), H help, C cue panel. Rehearsal and debug keys are
 // separate and never needed in a performance: Enter full screen, T tuning panel, P setup
-// panel, D debug readout, V flow field arrows, G flock overlay.
+// panel, D debug readout, V flow field arrows, G flock overlay, A agent sensors, O buffer views.
 
 export type Action =
   | { type: 'next' }
@@ -21,7 +21,9 @@ export type Action =
   | { type: 'setup' }
   | { type: 'hud' }
   | { type: 'fieldArrows' }
-  | { type: 'flockOverlay' };
+  | { type: 'flockOverlay' }
+  | { type: 'probeAgent' }
+  | { type: 'bufferView' };
 
 /** Every key binding: key (lower case) to action. The help overlay is generated from LIVE_KEYS. */
 export const BINDINGS: Readonly<Record<string, Action>> = {
@@ -39,6 +41,8 @@ export const BINDINGS: Readonly<Record<string, Action>> = {
   d: { type: 'hud' },
   v: { type: 'fieldArrows' },
   g: { type: 'flockOverlay' },
+  a: { type: 'probeAgent' },
+  o: { type: 'bufferView' },
   ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [String(i + 1), { type: 'jump', scene: i } as Action])),
 };
 

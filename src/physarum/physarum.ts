@@ -26,6 +26,8 @@ import moveExtendedWgsl from './move_extended.wgsl?raw';
 import depositWgsl from './deposit.wgsl?raw';
 import diffuseWgsl from './diffuse.wgsl?raw';
 import displayWgsl from './display.wgsl?raw';
+import probeOverlayWgsl from './probe_overlay.wgsl?raw';
+import pickWgsl from './pick.wgsl?raw';
 import steeringWgsl from '../steering/steering.wgsl?raw';
 import fieldSampleWgsl from '../flow/field_sample.wgsl?raw';
 import flowBiasWgsl from '../coupling/flow_bias.wgsl?raw';
@@ -38,6 +40,10 @@ export const MAX_AGENTS = 2_000_000;
 const AGENT_BYTES = 16; // vec2f pos, f32 heading, f32 progress
 const VELOCITY_BYTES = 8; // vec2f, used only by the extended mode (inertia)
 const PARAM_BYTES = 112;
+/** The probe index when no agent is followed (the agent pass compares its own index against it). */
+const NO_PROBE = 0xffffffff;
+/** Words in the probe buffer (see move.wgsl for what each one holds). */
+export const PROBE_WORDS = 24;
 /** Edge darkening of the display (0 = none). A fixed, subtle value; see DECISIONS (M5). */
 const VIGNETTE = 0.15;
 const EXT_FLOATS = 64;
@@ -108,8 +114,14 @@ export class Physarum {
 
   /** The flock layer: boids, the spatial grid that finds their neighbours, the debug overlay. */
   readonly flock: FlockLayer;
-  /** Draw the flock's grid and what boid 0 perceives over the picture (debug overlay, key G). */
+  /** Draw the flock's grid and what the selected boid perceives over the picture (debug overlay, key G). */
   flockDebug = false;
+  /** Draw the sensors of one Physarum agent over the picture (debug overlay, key A). */
+  probeOverlay = false;
+  /** The agent the sensor overlay follows (an index into the agent buffer), or -1 for none. */
+  probeAgent = -1;
+  /** Which buffer the display shows (debug, key O): 0 the picture, 1 trail, 2 delayed trail, 3 change, 4 agents per pixel. */
+  viewMode = 0;
 
   private gpu: Gpu;
   private width = 0;
@@ -123,6 +135,11 @@ export class Physarum {
 
   private paramsBuf: GPUBuffer;
   private extBuf: GPUBuffer;
+  private probeBuf: GPUBuffer;
+  private probePipe!: GPURenderPipeline;
+  private probeBG!: GPUBindGroup;
+  private pickDistancePipe!: GPUComputePipeline;
+  private pickIndexPipe!: GPUComputePipeline;
   private agentsBuf: GPUBuffer;
   private velocityBuf: GPUBuffer;
   private trail: GPUBuffer[] = [];
@@ -190,6 +207,11 @@ export class Physarum {
       size: EXT_FLOATS * 4,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    this.probeBuf = device.createBuffer({
+      label: 'physarum probe',
+      size: PROBE_WORDS * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
     this.agentsBuf = device.createBuffer({
       label: 'physarum agents',
       size: MAX_AGENTS * AGENT_BYTES,
@@ -223,6 +245,38 @@ export class Physarum {
       fragment: { module: displayModule, entryPoint: 'fs', targets: [{ format: gpu.format }] },
       primitive: { topology: 'triangle-list' },
     });
+
+    // Sensor overlay: one full-screen pass that draws what the probe buffer says, blended over the picture.
+    const probeModule = device.createShaderModule({ label: 'physarum probe overlay', code: commonWgsl + probeOverlayWgsl });
+    this.probePipe = device.createRenderPipeline({
+      label: 'physarum probe overlay',
+      layout: 'auto',
+      vertex: { module: probeModule, entryPoint: 'vs' },
+      fragment: {
+        module: probeModule,
+        entryPoint: 'fs',
+        targets: [{
+          format: gpu.format,
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          },
+        }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    this.probeBG = device.createBindGroup({
+      layout: this.probePipe.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.paramsBuf } },
+        { binding: 1, resource: { buffer: this.probeBuf } },
+      ],
+    });
+    const pickModule = device.createShaderModule({ label: 'pick nearest', code: pickWgsl });
+    const pickPipe = (entryPoint: string) =>
+      device.createComputePipeline({ label: entryPoint, layout: 'auto', compute: { module: pickModule, entryPoint } });
+    this.pickDistancePipe = pickPipe('pickDistance');
+    this.pickIndexPipe = pickPipe('pickIndex');
 
     this.initBG = device.createBindGroup({
       layout: this.initPipe.getBindGroupLayout(0),
@@ -314,7 +368,7 @@ export class Physarum {
       this.moveBG.push(
         device.createBindGroup({
           layout: this.movePipe.getBindGroupLayout(0),
-          entries: [params, entry(1, this.agentsBuf), entry(2, here), entry(3, this.counter), entry(4, this.flow.fieldBuffer)],
+          entries: [params, entry(1, this.agentsBuf), entry(2, here), entry(3, this.counter), entry(4, this.flow.fieldBuffer), entry(5, this.probeBuf)],
         }),
       );
       this.moveExtBG.push(
@@ -328,6 +382,7 @@ export class Physarum {
             entry(4, this.extBuf),
             entry(5, this.velocityBuf),
             entry(6, this.flow.fieldBuffer),
+            entry(7, this.probeBuf),
           ],
         }),
       );
@@ -348,7 +403,7 @@ export class Physarum {
       this.displayBG.push(
         device.createBindGroup({
           layout: this.displayPipe.getBindGroupLayout(0),
-          entries: [params, entry(1, here), entry(2, this.slow)],
+          entries: [params, entry(1, here), entry(2, this.slow), entry(3, this.counter)],
         }),
       );
     }
@@ -377,10 +432,12 @@ export class Physarum {
     this.flow.reset(this.seed, this.flowInput());
     this.flock.reset(this.seed, this.flockInput());
 
-    // Waves, bursts and stir belong to the run that just ended.
+    // Waves, bursts, stir and the accent's surge belong to the run that just ended. (The surge was
+    // left out until M7, when a check found two runs from the same seed differing after an accent.)
     for (let w = 0; w < WAVE_COUNT; w++) this.waves.set([0.5, 0.5, NEVER, 0.5], w * 4);
     this.nextWave = 0;
     this.pendingSpawn = 0;
+    this.surgeValue = 0;
     this.pen.stirX = 0;
     this.pen.stirY = 0;
     // Presets restart settled on their targets.
@@ -582,6 +639,8 @@ export class Physarum {
     f[23] = VIGNETTE;
     u[24] = Math.max(0, Math.min(PALETTE_COUNT - 1, Math.floor(p.paletteB)));
     f[25] = Math.min(1, Math.max(0, p.paletteMix));
+    u[26] = this.probeAgent >= 0 ? this.probeAgent >>> 0 : NO_PROBE;
+    u[27] = Math.max(0, Math.min(4, Math.floor(this.viewMode)));
     this.gpu.device.queue.writeBuffer(this.paramsBuf, 0, buf);
   }
 
@@ -708,6 +767,13 @@ export class Physarum {
     pass.end();
 
     if (this.fieldArrows) this.flow.renderArrows(encoder, view, canvasWidth, canvasHeight);
+    if (this.probeOverlay && this.probeAgent >= 0) {
+      const probe = encoder.beginRenderPass({ label: 'probe overlay', colorAttachments: [{ view, loadOp: 'load', storeOp: 'store' }] });
+      probe.setPipeline(this.probePipe);
+      probe.setBindGroup(0, this.probeBG);
+      probe.draw(3);
+      probe.end();
+    }
     if (this.flockDebug && this.params.flockCount > 0) {
       this.flock.renderDebug(encoder, view, canvasWidth, canvasHeight, Math.min(MAX_BOIDS, Math.floor(this.params.flockCount * this.countScale)));
     }
@@ -749,7 +815,112 @@ export class Physarum {
       });
   }
 
+  // ---- Debug overlays: choosing what to look at. ----
+
+  /**
+   * The item of `items` (agents or boids: 16-byte entries that start with a position in 0..1)
+   * nearest to the point (x, y) in 0..1, found on the GPU (pick.wgsl). `count` items are awake.
+   * The answer is read back once, because a key press asked for it; nothing here runs per frame.
+   */
+  async pickNearest(items: GPUBuffer, count: number, x: number, y: number): Promise<{ index: number; distance: number }> {
+    const { device } = this.gpu;
+    if (count <= 0) return { index: 0, distance: Infinity };
+    const uniform = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const best = device.createBuffer({ size: 8, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+    const staging = device.createBuffer({ size: 8, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const data = new ArrayBuffer(32);
+    const f = new Float32Array(data);
+    f[0] = x;
+    f[1] = y;
+    f[2] = this.width;
+    f[3] = this.height;
+    new Uint32Array(data)[4] = count >>> 0;
+    device.queue.writeBuffer(uniform, 0, data);
+    device.queue.writeBuffer(best, 0, new Uint32Array([0xffffffff, 0xffffffff]));
+    const enc = device.createCommandEncoder({ label: 'pick nearest' });
+    for (const pipe of [this.pickDistancePipe, this.pickIndexPipe]) {
+      const pass = enc.beginComputePass();
+      pass.setPipeline(pipe);
+      pass.setBindGroup(0, device.createBindGroup({
+        layout: pipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: uniform } },
+          { binding: 1, resource: { buffer: items } },
+          { binding: 2, resource: { buffer: best } },
+        ],
+      }));
+      this.dispatch1D(pass, count);
+      pass.end();
+    }
+    enc.copyBufferToBuffer(best, 0, staging, 0, 8);
+    device.queue.submit([enc.finish()]);
+    await staging.mapAsync(GPUMapMode.READ);
+    const out = new Uint32Array(staging.getMappedRange().slice(0));
+    staging.unmap();
+    uniform.destroy();
+    best.destroy();
+    staging.destroy();
+    return { index: out[1], distance: Math.sqrt(new Float32Array(out.buffer)[0]) };
+  }
+
+  /** Follow the awake Physarum agent nearest to (x, y) in 0..1 with the sensor overlay. Returns its index. */
+  async selectAgent(x: number, y: number): Promise<number> {
+    const n = Math.max(0, Math.min(MAX_AGENTS, Math.floor(this.effectiveParams().agentCount)));
+    const { index } = await this.pickNearest(this.agentsBuf, n, x, y);
+    this.gpu.device.queue.writeBuffer(this.probeBuf, 0, new Float32Array(PROBE_WORDS)); // forget the last agent's numbers
+    this.probeAgent = index;
+    return index;
+  }
+
+  /** Follow the awake boid nearest to (x, y) in 0..1 with the flock overlay. Returns its index. */
+  async selectBoid(x: number, y: number): Promise<number> {
+    const n = Math.min(MAX_BOIDS, Math.floor(this.effectiveParams().flockCount));
+    const { index } = await this.pickNearest(this.flock.boidBuffer, n, x, y);
+    this.flock.debugIndex = index;
+    return index;
+  }
+
+  /** What the followed agent perceived and decided in the last step (words listed in move.wgsl). */
+  async readProbe(): Promise<Float32Array> {
+    return new Float32Array(await this.debugRead(this.probeBuf, PROBE_WORDS * 4));
+  }
+
   // ---- Test and debug support. Read-backs are for tests only, never in the frame loop. ----
+
+  /**
+   * Draw the picture as the display shows it (palette, tone, overlays that are on) into an
+   * off-screen texture of the given size and read it back as RGBA pixels. Tests and the sweep tool
+   * only: the screenshots they save are exactly what the audience would see at that moment.
+   */
+  async renderToPixels(width: number, height: number): Promise<{ width: number; height: number; data: Uint8ClampedArray }> {
+    const { device, format } = this.gpu;
+    const texture = device.createTexture({ size: [width, height], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+    const rowBytes = Math.ceil((width * 4) / 256) * 256; // copies need rows padded to 256 bytes
+    const staging = device.createBuffer({ size: rowBytes * height, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const enc = device.createCommandEncoder({ label: 'render to pixels' });
+    this.render(enc, texture.createView(), width, height);
+    enc.copyTextureToBuffer({ texture }, { buffer: staging, bytesPerRow: rowBytes }, [width, height]);
+    device.queue.submit([enc.finish()]);
+    this.afterSubmit();
+    await staging.mapAsync(GPUMapMode.READ);
+    const raw = new Uint8Array(staging.getMappedRange().slice(0));
+    staging.unmap();
+    staging.destroy();
+    texture.destroy();
+    const bgra = format.startsWith('bgra');
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const from = y * rowBytes + x * 4;
+        const to = (y * width + x) * 4;
+        data[to] = raw[from + (bgra ? 2 : 0)];
+        data[to + 1] = raw[from + 1];
+        data[to + 2] = raw[from + (bgra ? 0 : 2)];
+        data[to + 3] = 255;
+      }
+    }
+    return { width, height, data };
+  }
 
   /** Overwrite the first agents (x, y normalised; heading radians; progress). Tests only. */
   debugWriteAgents(data: Float32Array): void {

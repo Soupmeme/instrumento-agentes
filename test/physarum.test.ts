@@ -8,24 +8,24 @@ import { turnDelta, sensorCell, stepAgent, wrap, type StepParams } from '../src/
 const RA = 0.5;
 const P: StepParams = { width: 100, height: 80, sensorDistance: 10, sensorAngle: 0.7, rotationAngle: RA, moveDistance: 2 };
 
-test('middle strictly highest keeps heading', () => {
+test('[PC-12] middle strictly highest keeps heading', () => {
   assert.equal(turnDelta(1, 0.5, 0.2, RA, true), 0);
   assert.equal(turnDelta(1, 0.5, 0.2, RA, false), 0);
 });
 
-test('middle lower than both sides turns by RA, direction from the coin', () => {
+test('[PC-12] middle lower than both sides turns by RA, direction from the coin', () => {
   assert.equal(turnDelta(0.1, 1, 1, RA, true), RA);
   assert.equal(turnDelta(0.1, 1, 1, RA, false), -RA);
   assert.equal(turnDelta(0.1, 1, 0.5, RA, true), RA); // still lower than both
 });
 
-test('otherwise turns toward the higher side', () => {
+test('[PC-12] otherwise turns toward the higher side', () => {
   assert.equal(turnDelta(0.5, 1, 0.2, RA, true), RA); // left higher
   assert.equal(turnDelta(0.5, 0.2, 1, RA, true), -RA); // right higher
   assert.equal(turnDelta(1, 1, 0.2, RA, true), RA); // middle ties with left, left beats right
 });
 
-test('empty ground gives no turn', () => {
+test('[PC-12] empty ground gives no turn', () => {
   assert.equal(turnDelta(0, 0, 0, RA, true), 0);
   assert.equal(turnDelta(0.3, 0.3, 0.3, RA, false), 0);
 });
@@ -37,7 +37,7 @@ test('wrap handles negatives and exact multiples', () => {
   assert.equal(wrap(-250, 100), 50);
 });
 
-test('sensor cells: straight ahead, and wrapped across the left edge', () => {
+test('[PC-13] sensor cells: straight ahead, and wrapped across the left edge', () => {
   assert.deepEqual(sensorCell({ x: 20.5, y: 30.5, heading: 0 }, 0, P), [30, 30]);
   // heading pi points to -x: 5.2 - 10 = -4.8, floor -5, wraps to 95
   const [ix] = sensorCell({ x: 5.2, y: 30.5, heading: Math.PI }, Math.PI, P);

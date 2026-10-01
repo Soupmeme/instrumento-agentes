@@ -214,3 +214,97 @@ Everything GPU-related below ran on one machine (one NVIDIA GPU, Chrome in the C
 - "A person who has never seen the app can walk through the three placeholder scenes and shape each one using only the help overlay": **not verified.** I walked through it myself using only the overlay's keys and mouse inputs (H, C, Space, wheel, click, F, S) and everything the overlay lists works, but I cannot play the part of a person who has never seen the app. Kiwi, or someone else, should try it cold.
 
 **Not verified:** any GPU other than this one; 1920 x 1080; a cold walkthrough by another person; the soak ran with the first, wider wheel ranges (only the macro ranges changed afterwards; the live loop and the scene test used the final ones); safe mode's real benefit on a slower GPU; the SPEC 8.8 test measures a difference, "visible" is my threshold (0.03) and my eye; hot reload only in the dev server; the autosave and import paths through the real file picker were not exercised in the browser (the logic is unit tested); the `dominant` label is documentation and does not match the measured energy in the dense scene; a hard cut between agent rules was unit tested but not run on the GPU with a classic scene; scene content, names and notes belong to Kiwi (no SONG_BRIEF.md yet).
+
+## 2026-09-30, M7 verification and documentation
+
+Everything GPU-related below ran on one machine (one NVIDIA GeForce RTX 4070, Chrome in the Claude desktop app) at a simulation grid of 1043 x 910, seed 7. Nothing was run at 1920 x 1080 or on another GPU. From about the middle of the session another program (a game) was using the GPU, which made every timing unreliable (0.35 ms per step became 0.9 to 1.5 ms); the checks that count things were not affected.
+
+**Built:**
+- **The prediction registry** (`src/verify/predictions.ts`): 62 predictions in 7 groups (classic Physarum 13, extended Physarum 9, flow followers 11, flock 10, coupling 6, scenes 7, tools 6), each with an id, a testable statement, what changes, and the check that tests it: a unit test titled `[ID]` (20 predictions), a GPU check (38) or a self-test section (11); some have more than one. A unit test fails if a prediction loses its check, or a check its prediction.
+- **CPU prediction tests:** 24 new, 139 in all. Flock predictions run on the CPU reference with 800 boids at the GPU's density (`test/predictions_flock.test.ts`, about 40 s), rules (`test/predictions_rules.test.ts`: the pen weight, the 22 presets, the turning radius v squared over F, the flow's turn limit), the registry integrity test, and the readout texts.
+- **`__exp.verify()`:** 38 GPU checks, each registered under its prediction's id; a background job that saves a report to `evidence/verify/`.
+- **Debug overlays:** key **A**, the sensors of the Physarum agent nearest the pointer (three sensors, readings, the turn it chose and why, in a text box); key **G** now follows the boid nearest the pointer instead of always boid 0; key **O** cycles the display through the trail, the delayed trail, the change and the agents per pixel; key **D** now adds one line per family with the live value of its parameters. The agent pass writes down what the chosen agent perceived and decided, and the overlay draws that, so it shows what the shader used.
+- **The sweep tool:** `__exp.sweepShots(key, values, {times})` saves the real display for each value and time to `evidence/sweeps/` with a manifest and a hash per file (12 screenshots of 4 sweeps are kept).
+- **Docs:** EXPLAINER section 7 (the tables of all 62 predictions, how to run each check, the debug tools, what the first run found, the limits), SCORE_TEMPLATE.md and a printable SCORE_TEMPLATE.html, the self-evaluation skeleton below, README, DECISIONS, `evidence/README.md`.
+
+**Process:** predictions and metrics first (DECISIONS.md), the CPU tests tuned on the CPU before the GPU work, three mutation checks with predicted failures on the new GPU code, one first GPU run kept unchanged as a report, then the corrections, then a final run after every code change.
+
+**Tests:**
+- Unit tests: 139 pass (was 115). The 24 new are listed above.
+- GPU self-test: 77 of 77 (was 67; 10 new: the probe against the CPU reference for the classic and the extended rule, and the pick against a brute-force search for agents and boids).
+- GPU checks (`__exp.verify()`): first run 32 of 37, with five misses (three thresholds of mine too tight, one check using the wrong field, one check that could not tell clock drift from cost); second run 37 of 37 after the corrections; final run 37 of 38 (TL-05, whether following an agent costs anything, is inconclusive while the GPU is shared). The three revised thresholds and the two corrected checks are written in the history of each prediction.
+- Mutation checks with predicted failures: (A) a probe reading written from the wrong sensor, (B) a pick that ignores wrapping, (C) S doubled in the extended probe: in each case exactly the predicted checks failed. Originals restored. TL-06 was run before its fix (fails) and after (passes).
+
+**Problems found while building (details in DECISIONS.md and EXPLAINER section 7):** two flock thresholds missed on the first CPU run (the claims held); the first GPU run's five misses; a reset did not clear the accent's surge, found because the dense scene's wheel number changed between runs (fixed, TL-06); a probe-cost check that took clock drift for cost; the first pick check could not have caught a missing wrap (edge points added); Windows shell quoting failed once more (patches written as files); the GPU shared with a game made timing meaningless for the second half of the session.
+
+**Seen (screenshots):** the sensor overlay on a classic agent (readout "middle is strictly highest: kept its heading") and on an extended one ("turned 80 deg toward the minus side, the higher reading"); the flock overlay with the boid nearest the pointer; the trail, change and agents-per-pixel views; the sweep screenshots (sensor distance 4 gives thin curling lines, 48 coarse fat veins; separation 0 piles the flock into a few streaks, 4 spreads it evenly). Looked at on an 800 x 700 pane; the overlay's marker sizes grow with the canvas but were not seen on a larger one.
+
+**Acceptance (SPEC 12, M7): "for each agent family, a documented set of predictions each accompanied by a reproducible check":** met in form: every family has a set (Physarum classic 13, extended 9, followers 11, flock 10, coupling 6, scenes 7), each with a check anyone can run, listed in EXPLAINER section 7. Two things limit what that says: (1) a pass on a regression row means "still true on this machine", not "newly confirmed", and the document marks which are new (11 of 62); (2) all of it is draft until Kiwi writes his verdict in the last column, and none of it has been run on another GPU.
+
+**Not verified:** any GPU other than this one; 1920 x 1080; the cost of the probe (inconclusive: -1.2%, -1.2% and 0.0% under a shared GPU with the rounds disagreeing by up to 14.7%, and no comparison with the M6 build); the GPU flock against the flock predictions at 10,000 boids (they are on the CPU reference; the GPU against the CPU is the self-test); the overlay on a projector; why the dense placeholder scene's wheel number still moves a little between runs (0.085 to 0.121, 0.107 to 0.108 when repeated; the accent's surge was one cause, the rest unknown); a cold walkthrough of the instrument by another person (from M6); the verdict of every prediction, which is Kiwi's.
+
+---
+
+## Self-evaluation (Autoevaluación)
+
+Kiwi writes the scores and the reflections himself. The score fields below are empty on purpose, and nothing in this file proposes a number. The evidence lists were filled in by Claude from what exists in the repository today; an item marked *(pending)* does not exist yet, and the evidence is only as good as the limits stated in each milestone entry above (one machine, one GPU, one seed).
+
+Date of this self-evaluation (Fecha): ____________
+
+### 1. Task fulfillment (Cumplimiento de la tarea): web technology, real time, interprets the chosen music
+
+**Score (Puntaje): ____ / 25**
+
+**Reflection (Reflexión):**
+
+**Evidence (Evidencia):**
+- Web technology: WebGPU compute and render, TypeScript, Vite, deployed on GitHub Pages: [README.md](README.md), [`src/gpu.ts`](src/gpu.ts), [`src/physarum/physarum.ts`](src/physarum/physarum.ts), live at https://soupmeme.github.io/instrumento-agentes/
+- Everything per agent runs on the GPU (the four allowed families only): [`src/physarum/move.wgsl`](src/physarum/move.wgsl), [`src/physarum/move_extended.wgsl`](src/physarum/move_extended.wgsl), [`src/flow/followers.wgsl`](src/flow/followers.wgsl), [`src/flock/flock.wgsl`](src/flock/flock.wgsl), and the rules in [CLAUDE.md](CLAUDE.md)
+- Real time at 60 steps per second, measured on one machine: the "Performance and stability" tables in [EXPLAINER.md](EXPLAINER.md) sections 1, 3, 4, 5 and 6, and the milestone entries above (M1 to M6)
+- Interprets the chosen music: the song is not chosen yet, so there is no evidence for this part *(pending)*. What exists: the cue panel with the song's clock (display only) and the scene engine: [`src/cue.ts`](src/cue.ts), [`src/scenes/`](src/scenes/), [SCORE_TEMPLATE.md](SCORE_TEMPLATE.md)
+- No audio analysis anywhere (the music is a plain audio element): [DECISIONS.md](DECISIONS.md) (2026-09-29 entry on the song sources) and [`src/audio.ts`](src/audio.ts)
+- Rehearsal hardening (20 minute run, device loss, full screen at presentation resolution) *(pending, milestone M8)*
+
+### 2. Understanding and verification (Comprensión y verificación): can explain and defend the system, and predict and verify what a parameter does
+
+**Score (Puntaje): ____ / 25**
+
+**Reflection (Reflexión):**
+
+**Evidence (Evidencia):**
+- What each family perceives and how it computes its action, with the formulas and a predicted-versus-measured table per family: [EXPLAINER.md](EXPLAINER.md) sections 1 to 6
+- Every prediction with an id, a testable statement and the check that tests it: [`src/verify/predictions.ts`](src/verify/predictions.ts), tables in [EXPLAINER.md](EXPLAINER.md) section 7
+- CPU references and their unit tests (run with `npm test`): [`src/physarum/reference.ts`](src/physarum/reference.ts), [`src/physarum/extended.ts`](src/physarum/extended.ts), [`src/steering/steering.ts`](src/steering/steering.ts), [`src/flock/flocking.ts`](src/flock/flocking.ts), [`src/coupling/coupling.ts`](src/coupling/coupling.ts), the tests in [`test/`](test/) (including [`test/predictions_flock.test.ts`](test/predictions_flock.test.ts), [`test/predictions_rules.test.ts`](test/predictions_rules.test.ts) and [`test/registry.test.ts`](test/registry.test.ts))
+- GPU against CPU on a real adapter, in the browser: `await __physarumSelfTest()` ([`src/physarum/selftest.ts`](src/physarum/selftest.ts) and its sections)
+- Reproducible GPU checks of the predictions: `await __exp.verify()` ([`src/verify/gpu_checks.ts`](src/verify/gpu_checks.ts)), the saved reports in [`evidence/verify/`](evidence/verify/)
+- Parameter sweeps with screenshots at fixed times from a fixed seed: `await __exp.sweepShots(...)` ([`src/verify/sweep_shots.ts`](src/verify/sweep_shots.ts)), the files in [`evidence/sweeps/`](evidence/sweeps/)
+- Debug overlays that show what one agent perceives: key A (a Physarum agent's three sensors, readings and decision), key G (a boid's perception), key V (the flow field), key O (the raw buffers), key D (the live value of each family's parameters); [EXPLAINER.md](EXPLAINER.md) section 7
+- Honest record of predictions that were wrong and how they were handled: the "Predicted versus measured" tables, the `history` fields of the registry, and the milestone entries above
+- Test limits stated per milestone (what ran on the GPU, what did not): each milestone entry above, "Not verified"
+
+### 3. Design and intention (Diseño e intención): can justify the selection and combination of behaviors and relate them to the musical interpretation
+
+**Score (Puntaje): ____ / 25**
+
+**Reflection (Reflexión):**
+
+**Evidence (Evidencia):**
+- Why these four families and how they are combined into one picture (shared trail, coupling channels, one palette): [EXPLAINER.md](EXPLAINER.md) section 5, [DECISIONS.md](DECISIONS.md) (M5)
+- Every design choice with its alternatives and reasons: [DECISIONS.md](DECISIONS.md)
+- The idea of scenes as regimes, brushes and keys, written as a draft in the author's own words to be edited into Kiwi's: [EXPLAINER.md](EXPLAINER.md) section 6
+- How a scene relates to the music: the real scenes and their notes *(pending: they come from SONG_BRIEF.md, protocol in SPEC 8.9)*; the three scenes that exist are placeholders for testing the engine: [`src/scenes/scenes.json`](src/scenes/scenes.json)
+- Open questions waiting for Kiwi: [ESCALATIONS.md](ESCALATIONS.md)
+
+### 4. Human interpretation (Interpretación humana): the score and the controls let the performer drive the system live and respond to what emerges
+
+**Score (Puntaje): ____ / 25**
+
+**Reflection (Reflexión):**
+
+**Evidence (Evidencia):**
+- The whole live vocabulary (pen, wheel, click, stir, scene keys, freeze, reset, safe mode) and that none of it needs a modifier key: [`src/scenes/keys.ts`](src/scenes/keys.ts), [`src/help.ts`](src/help.ts), the key map tests in [`test/scenes.test.ts`](test/scenes.test.ts)
+- Every live input makes a measurable difference in every scene: [EXPLAINER.md](EXPLAINER.md) section 6 (the table of the wheel, pen and click measurements) and registry ids SC-01 to SC-03
+- Nothing happens by itself (no timeline, no automation): the unit test of registry id SC-04
+- A blank visual score, one row per passage, with columns for the scene and the gestures and none for parameters: [SCORE_TEMPLATE.md](SCORE_TEMPLATE.md), printable as [SCORE_TEMPLATE.html](SCORE_TEMPLATE.html)
+- The filled score and rehearsal records *(pending: they belong to Kiwi and depend on the song)*
+- A cold walkthrough of the instrument by someone who has never seen it *(pending, not verified; see the M6 entry)*

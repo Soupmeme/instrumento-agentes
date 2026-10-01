@@ -56,6 +56,8 @@ export class FlockLayer {
 
   private flockBuf: GPUBuffer;
   private debugBuf: GPUBuffer;
+  /** The boid the debug overlay follows (an index into the boid buffer; the order of the buffer never changes). */
+  debugIndex = 0;
   private boids: GPUBuffer[];
   private cellCountBuf: GPUBuffer;
   private cellStartBuf: GPUBuffer;
@@ -315,7 +317,7 @@ export class FlockLayer {
    * view cone of one selected boid, and every boid coloured by how the selected boid sees it.
    */
   renderDebug(encoder: GPUCommandEncoder, view: GPUTextureView, canvasW: number, canvasH: number, count: number): void {
-    this.gpu.device.queue.writeBuffer(this.debugBuf, 0, new Float32Array([canvasW, canvasH, 0, 0]));
+    this.gpu.device.queue.writeBuffer(this.debugBuf, 0, new Float32Array([canvasW, canvasH, this.debugIndex, 0]));
     const pass = encoder.beginRenderPass({
       label: 'flock debug',
       colorAttachments: [{ view, loadOp: 'load', storeOp: 'store' }],

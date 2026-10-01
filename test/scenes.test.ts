@@ -51,7 +51,7 @@ test('curves: 0 to 0, 1 to 1, monotonic, clamped, and the named shapes', () => {
   assert.ok(curve('in', 0.5) < 0.5 && curve('out', 0.5) > 0.5 && curve('smooth', 0.5) === 0.5);
 });
 
-test('the shipped scenes.json is valid, has three scenes, and every one is marked PLACEHOLDER', () => {
+test('[SC-07] the shipped scenes.json is valid, has three scenes, and every one is marked PLACEHOLDER', () => {
   const scenes = loadShipped();
   assert.equal(scenes.length, 3);
   for (const s of scenes) {
@@ -76,7 +76,7 @@ test('the shipped scenes stay inside the safe ranges found in M4 and M5', () => 
   }
 });
 
-test('validation clamps, ignores and drops instead of throwing', () => {
+test('[SC-07] validation clamps, ignores and drops instead of throwing', () => {
   const r = validateScene({
     id: 'x', name: 'X',
     params: { decay: 7, nonsense: 3, agentCount: 'many', flockSepWeight: -1, mode: 1 },
@@ -171,7 +171,7 @@ test('a scene switch is a transition: it starts where the world is and lands exa
   for (const [k, x] of Object.entries(want)) assert.equal(num(host.params)[k], x, `${k} lands exactly`);
 });
 
-test('no parameter overshoots during a transition, and blended ones move one way only', () => {
+test('[SC-05] no parameter overshoots during a transition, and blended ones move one way only', () => {
   const { host, d } = start(0);
   const from = { ...num(host.params) };
   const scene = loadShipped()[1];
@@ -294,7 +294,7 @@ test('next and previous stop at the ends (no wrap), jump clamps, and the same sc
   assert.equal(host.params.decay, resolveScene(d.scene!, 0.5).decay);
 });
 
-test('with no input the director changes nothing, however long it runs (no timers, no automation)', () => {
+test('[SC-04] with no input the director changes nothing, however long it runs (no timers, no automation)', () => {
   const { host, d } = start(1);
   const before = JSON.stringify(host.params);
   const log = host.log.length;
@@ -430,7 +430,7 @@ test('rehearsal readout: the changes of a switch are listed, biggest first', () 
 
 // ---------------------------------------------------------------- keys
 
-test('the key map: single keys, no modifiers, nothing shared, digits jump, Escape and S both mean safe', () => {
+test('[SC-06] the key map: single keys, no modifiers, nothing shared, digits jump, Escape and S both mean safe', () => {
   const key = (k: string, extra: object = {}) => actionForKey({ key: k, ...extra });
   assert.deepEqual(key(' '), { type: 'next' });
   assert.deepEqual(key('b'), { type: 'previous' });
@@ -450,7 +450,7 @@ test('the key map: single keys, no modifiers, nothing shared, digits jump, Escap
   assert.ok(LIVE_KEYS.length >= live.length - 1, 'the help overlay lists every live key');
 });
 
-test('the live vocabulary has no key that a debug or rehearsal feature also needs', () => {
+test('[SC-06] the live vocabulary has no key that a debug or rehearsal feature also needs', () => {
   const debug = ['fullscreen', 'tuning', 'setup', 'hud', 'fieldArrows', 'flockOverlay'];
   const liveKeys = Object.entries(BINDINGS).filter(([, a]) => !debug.includes(a.type)).map(([k]) => k);
   const debugKeys = Object.entries(BINDINGS).filter(([, a]) => debug.includes(a.type)).map(([k]) => k);

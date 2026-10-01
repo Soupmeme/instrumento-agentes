@@ -1,0 +1,96 @@
+{
+  "tool": "sweepShots",
+  "label": "PC-04-sensor-angle",
+  "key": "sensorAngle",
+  "values": [
+    0.2617993877991494,
+    0.7853981633974483,
+    1.5707963267948966
+  ],
+  "times": [
+    900
+  ],
+  "seed": 7,
+  "screenshot": {
+    "width": 400,
+    "height": 349
+  },
+  "grid": {
+    "width": 1043,
+    "height": 910
+  },
+  "adapter": "",
+  "parameters": {
+    "mode": 0,
+    "backgroundPreset": 21,
+    "penPreset": 4,
+    "penRadius": 0.25,
+    "inertia": 0,
+    "presetSeconds": 0.5,
+    "physarumOn": 1,
+    "followerCount": 0,
+    "followerSpeed": 2.5,
+    "followerForce": 0.12,
+    "followerLookahead": 0,
+    "followerRespawn": 0.002,
+    "followerDeposit": 0.05,
+    "flockCount": 0,
+    "flockSpeed": 2.5,
+    "flockForce": 0.08,
+    "flockSepWeight": 2,
+    "flockAliWeight": 1.5,
+    "flockCohWeight": 0.6,
+    "flockSepRadius": 12,
+    "flockNbrRadius": 40,
+    "flockFov": 4.71238898038469,
+    "flockPenMode": 2,
+    "flockPenStrength": 4,
+    "boidDeposit": 0.15,
+    "fieldKind": 0,
+    "fieldFrequency": 3,
+    "fieldEvolution": 0.08,
+    "fieldQuantSteps": 0,
+    "fieldStrength": 1,
+    "penFieldMode": 1,
+    "penFieldStrength": 0.9,
+    "agentCount": 400000,
+    "sensorDistance": 16,
+    "sensorAngle": 0.7853981633974483,
+    "rotationAngle": 0.7853981633974483,
+    "moveDistance": 1.5,
+    "decay": 0.9,
+    "depositFactor": 0.05,
+    "respawnRate": 0.001,
+    "displayGain": 6,
+    "flowToPhysarum": 0,
+    "trailToBoids": 0,
+    "palette": 0,
+    "changeColour": 0.5,
+    "paletteB": 0,
+    "paletteMix": 0
+  },
+  "note": "Each file is the real display of that value after that many steps from the seed; parameters lists the defaults and the overrides, and the swept key takes each of values.",
+  "shots": [
+    {
+      "value": 0.2617993877991494,
+      "step": 900,
+      "file": "sensorAngle_15deg_t900.png",
+      "bytes": 340481,
+      "sha256": "35f4412619d54459b7c816a244c95895e98acbbd2d7b8f52e3065755510243d4"
+    },
+    {
+      "value": 0.7853981633974483,
+      "step": 900,
+      "file": "sensorAngle_45deg_t900.png",
+      "bytes": 316338,
+      "sha256": "ef00d317d0ea6d5cc8b61081ea1594cc1271766be71e7f924c677080b8b922ff"
+    },
+    {
+      "value": 1.5707963267948966,
+      "step": 900,
+      "file": "sensorAngle_90deg_t900.png",
+      "bytes": 300100,
+      "sha256": "803eb4f4487b8090b366d4ed0be5c7aa525c89319bbad5aac2773cb24bab031d"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-01T02:23:42.627Z",
+  "done": 1,
+  "total": 1,
+  "current": "SC-01",
+  "results": [
+    {
+      "id": "SC-01",
+      "family": "scenes",
+      "change": "the wheel, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 16.7,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "wheelDifference": 0.229,
+            "dominant": [
+              "physarum",
+              "physarum",
+              "physarum"
+            ]
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "wheelDifference": 0.109,
+            "dominant": [
+              "physarum",
+              "physarum",
+              "physarum"
+            ]
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "wheelDifference": 0.239,
+            "dominant": [
+              "followers",
+              "followers",
+              "followers"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "failedIds": []
+  },
+  "adapter": "",
+  "grid": [
+    1043,
+    910
+  ],
+  "seed": 7
+}

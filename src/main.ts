@@ -13,6 +13,8 @@ import { saveAutosave } from './scenes/storage';
 import { CuePanel } from './cue';
 import { buildHelp } from './help';
 import { SceneTools } from './scene_tools';
+import { Inspector } from './inspect';
+import { familyReadout } from './inspect_text';
 import type { SceneData } from './scenes/types';
 
 // M6: the instrument. Physarum (two modes), flow followers and a flock in one shared picture,
@@ -66,6 +68,8 @@ const params: PhysarumParams = { ...DEFAULT_PARAMS };
 
 const fmt = (ms: number) => (Number.isFinite(ms) ? ms.toFixed(2) : '?');
 
+const inspector = new Inspector($('probe'), $('view-label'), () => physarum);
+
 const hud = new Hud($('hud'), () => {
   if (!gpu) return 'no GPU device';
   const info = gpu.adapter.info;
@@ -84,6 +88,7 @@ const hud = new Hud($('hud'), () => {
       ? `GPU ms: agents ${fmt(t.agent)}, followers ${fmt(t.followers)}, field ${fmt(t.field)}, flock grid ${fmt(t.flockGrid)}, flock ${fmt(t.flock)}, deposit ${fmt(t.deposit)}, diffuse ${fmt(t.diffuse)}, display ${fmt(t.render)}\n`
       : 'GPU timing unavailable (no timestamp-query)\n') +
     `followers ${Math.floor(params.followerCount).toLocaleString()}, boids ${Math.floor(params.flockCount).toLocaleString()}, Physarum ${params.physarumOn ? 'on' : 'off'}, field arrows ${physarum?.fieldArrows ? 'on' : 'off'}, flock overlay ${physarum?.flockDebug ? 'on' : 'off'}\n` +
+    `${familyReadout(params)}\n` +
     `adapter ${info.vendor || '?'} ${info.architecture || ''} ${info.description || ''}\n` +
     `validation errors ${validationErrors}, device losses ${lostCount}`
   );
@@ -251,6 +256,7 @@ function frame(now: number): void {
   }
 
   physarum.wantTimings = hud.visible;
+  inspector.update(now);
   const encoder = gpu.device.createCommandEncoder({ label: 'frame' });
   physarum.render(encoder, gpu.context.getCurrentTexture().createView(), canvas.width, canvas.height);
   gpu.device.queue.submit([encoder.finish()]);
@@ -388,8 +394,16 @@ function onKey(ev: KeyboardEvent): void {
       if (physarum) physarum.fieldArrows = !physarum.fieldArrows;
       break;
     case 'flockOverlay':
-      // Debug overlay: the flock's spatial grid and what one boid perceives.
-      if (physarum) physarum.flockDebug = !physarum.flockDebug;
+      // Debug overlay: the flock's spatial grid and what the boid nearest the pointer perceives.
+      void inspector.toggleFlock();
+      break;
+    case 'probeAgent':
+      // Debug overlay: the sensors of the Physarum agent nearest the pointer, and what it decided.
+      void inspector.toggleAgent();
+      break;
+    case 'bufferView':
+      // Debug: the display shows a raw buffer (trail, delayed trail, change, agents per pixel).
+      inspector.cycleView();
       break;
   }
 }

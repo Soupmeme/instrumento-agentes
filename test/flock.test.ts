@@ -47,7 +47,7 @@ function cloud(n: number, cfg: FlockConfig, seed: number): Boid[] {
   });
 }
 
-test('fixed point: rounds to 1/1024 and adds exactly, in any order', () => {
+test('[FL-10] fixed point: rounds to 1/1024 and adds exactly, in any order', () => {
   assert.equal(toFixed(1), FIXED);
   assert.equal(toFixed(0.3), Math.round(0.3 * FIXED));
   const xs = [0.1234, -3.3, 2.71828, 0.0007, -0.5, 1.9999];
@@ -131,7 +131,7 @@ test('the 9 neighbour cells wrap around the world edge and are all different', (
   assert.ok(corner.includes(grid.cellsX - 1), 'the cell on the far side of the x edge is a neighbour');
 });
 
-test('grid candidates contain every boid within the radius (the grid misses nobody)', () => {
+test('[FL-10] grid candidates contain every boid within the radius (the grid misses nobody)', () => {
   const radius = 40;
   const boids = cloud(400, CFG, 11);
   const grid = buildGrid(boids.map((b) => b.pos), CFG.width, CFG.height, radius);
@@ -148,7 +148,7 @@ test('grid candidates contain every boid within the radius (the grid misses nobo
   }
 });
 
-test('grid step equals the all-pairs step exactly (same boids examined, same sums)', () => {
+test('[FL-10] grid step equals the all-pairs step exactly (same boids examined, same sums)', () => {
   for (const [radiusScale, seed] of [[1, 1], [0.4, 2], [2, 3]] as const) {
     const cfg = { ...CFG, sepRadius: 10 * radiusScale, nbrRadius: 40 * radiusScale, fov: 4 };
     const boids = cloud(300, cfg, seed);
@@ -229,7 +229,7 @@ test('the view cone hides neighbours behind me, and a boid at rest sees all arou
   assert.ok(Math.abs(cosHalfFov(Math.PI) - 0) < 1e-12);
 });
 
-test('separation sees all around whatever the view cone, so pushes between two boids are mutual', () => {
+test('[FL-08] separation sees all around whatever the view cone, so pushes between two boids are mutual', () => {
   const cfg = { ...CFG, fov: Math.PI / 2 };
   // B is directly behind A, 5 px away. Neither follows the other (outside the cone) but both avoid each other.
   const boids = [boid(100, 100, 2, 0), boid(95, 100, 2, 0)];

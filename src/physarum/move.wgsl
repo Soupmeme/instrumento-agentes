@@ -16,6 +16,7 @@
 @group(0) @binding(2) var<storage, read> trail: array<f32>;
 @group(0) @binding(3) var<storage, read_write> counter: array<atomic<u32>>;
 @group(0) @binding(4) var<storage, read> field: array<vec2f>; // flow field, read when flowBias > 0
+@group(0) @binding(5) var<storage, read_write> probe: array<f32>; // what the selected agent perceived and decided (sensor overlay, debug)
 
 fn fieldDims() -> vec2u { return vec2u(params.fieldW, params.fieldH); }
 
@@ -53,23 +54,27 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   var p = a.pos * size; // work in pixels
 
   // 1. Sense.
+  let p0 = p; // where it stood when it sensed (the sensor overlay reads this)
+  let h0 = a.heading;
   let f = sense(p, a.heading);
   let l = sense(p, a.heading + params.sensorAngle);
   let r = sense(p, a.heading - params.sensorAngle);
 
   // 2. Turn (the classic rule).
+  var turn = 0.0;
   if (f > l && f > r) {
     // Middle strictly highest: keep going straight.
   } else if (f < l && f < r) {
     // Middle lower than both sides: pick a side at random.
     s = pcg(s);
-    if (to01(s) < 0.5) { a.heading += params.rotationAngle; } else { a.heading -= params.rotationAngle; }
+    if (to01(s) < 0.5) { turn = params.rotationAngle; } else { turn = -params.rotationAngle; }
   } else if (l > r) {
-    a.heading += params.rotationAngle; // toward the higher side
+    turn = params.rotationAngle; // toward the higher side
   } else if (r > l) {
-    a.heading -= params.rotationAngle;
+    turn = -params.rotationAngle;
   }
   // (l == r and the middle is not an extreme: no preference, keep heading.)
+  a.heading += turn;
 
   // 2b. Coupling: the flow field bends the heading (steering, see flow_bias.wgsl). Off at weight 0.
   a.heading = flowBiasedHeading(a.heading, params.moveDistance, p, size);
@@ -89,4 +94,24 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   // 0.99999994 is the largest f32 below 1.
   a.pos = min(p / size, vec2f(0.99999994));
   agents[i] = a;
+
+  // Sensor overlay (debug, key A): one agent writes down what it sensed and decided. The three
+  // sensors are named by their side of the heading: plus (heading + SA), middle, minus (heading - SA).
+  // Words: 0 agent, 1 step + 1 (0 = never written), 2-3 position, 4 heading, 5 S (extended only),
+  // 6 SD, 7 SA, 8 RA, 9 MD, 10-12 plus sensor (x, y, reading), 13-15 middle, 16-18 minus,
+  // 19 turn applied by the sensor rule (radians), 22-23 position after the move.
+  if (i == params.probe) {
+    probe[0] = f32(i);
+    probe[1] = f32(params.frame + 1u);
+    probe[2] = p0.x; probe[3] = p0.y; probe[4] = h0; probe[5] = 0.0;
+    probe[6] = params.sensorDistance; probe[7] = params.sensorAngle; probe[8] = params.rotationAngle; probe[9] = params.moveDistance;
+    let plus = p0 + vec2f(cos(h0 + params.sensorAngle), sin(h0 + params.sensorAngle)) * params.sensorDistance;
+    let mid = p0 + vec2f(cos(h0), sin(h0)) * params.sensorDistance;
+    let minus = p0 + vec2f(cos(h0 - params.sensorAngle), sin(h0 - params.sensorAngle)) * params.sensorDistance;
+    probe[10] = plus.x; probe[11] = plus.y; probe[12] = l;
+    probe[13] = mid.x; probe[14] = mid.y; probe[15] = f;
+    probe[16] = minus.x; probe[17] = minus.y; probe[18] = r;
+    probe[19] = turn;
+    probe[22] = p.x; probe[23] = p.y;
+  }
 }

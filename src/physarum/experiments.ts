@@ -10,6 +10,8 @@
 //   soak(cfg)                  accelerated long run with periodic health checks (background job)
 //   monitor(seconds)           watch the real-time frame loop and GPU timings (background job)
 //   sceneTest(), transitionTest(from, to), sceneSoak(opts): the scene system (SPEC 8.8)
+//   sweepShots(key, values, opts)  sweep one parameter and save a screenshot per value and time to evidence/sweeps/ (M7)
+//   verify(which)              run the GPU checks of the prediction registry as a background job, poll window.__verify (M7)
 //   couplingStats(set, opts)   flow alignment, enrichment, family shares; couplingSweep(key, values, set): one parameter
 //   flockStats(set, opts)      measure a flock (order, spacing, flocks); flockBench(counts, set): GPU time per pass
 // Background jobs report through window.__job and window.__mon.
@@ -21,6 +23,9 @@ import { sampleField } from '../flow/flowfield.ts';
 import { flockStats, flockBench, flockSoak, flockSweep } from '../flock/experiments_flock';
 import { couplingStats, couplingSweep } from '../coupling/experiments_coupling';
 import { sceneTest, transitionTest, sceneSoak } from '../scenes/experiments_scenes';
+import { sweepShots, type SweepShotsOptions } from '../verify/sweep_shots';
+import { runVerify } from '../verify/gpu_checks';
+import * as me from './experiments';
 
 const TAU = Math.PI * 2;
 
@@ -253,7 +258,7 @@ function showSheet(tiles: { label: string; canvas: HTMLCanvasElement }[], append
   }
 }
 
-function hideSheet(): void {
+export function hideSheet(): void {
   document.getElementById('exp-sheet')?.remove();
 }
 
@@ -1227,5 +1232,7 @@ export function installExperiments(p: Physarum): void {
     transitionTest: (from: number, to: number, o?: Parameters<typeof transitionTest>[3]) => transitionTest(p, from, to, o),
     sceneSoak: (o?: Parameters<typeof sceneSoak>[1]) => sceneSoak(p, o),
     hideSheet,
+    sweepShots: (k: keyof PhysarumParams, v: number[], o?: SweepShotsOptions) => sweepShots(p, k, v, o),
+    verify: (which?: string[] | string) => runVerify({ p, x: me }, which),
   };
 }

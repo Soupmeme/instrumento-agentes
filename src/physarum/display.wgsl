@@ -12,6 +12,7 @@
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage, read> trail: array<f32>;
 @group(0) @binding(2) var<storage, read> delayed: array<f32>;
+@group(0) @binding(3) var<storage, read> counter: array<u32>; // agents per pixel after the last agent pass (view 4 only)
 
 @vertex
 fn vs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
@@ -55,6 +56,31 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
     mix(delayedAt(ix, iy), delayedAt(ix + 1, iy), fr.x),
     mix(delayedAt(ix, iy + 1), delayedAt(ix + 1, iy + 1), fr.x),
     fr.y);
+
+  // Buffer views (debug, key O): the raw buffers instead of the picture. They only change what is
+  // drawn here; the simulation never reads the display.
+  if (params.viewMode != 0u) {
+    var grey = 0.0;
+    var tint = vec3f(0.0);
+    if (params.viewMode == 1u) {
+      // The trail as stored, with the display gain but no tone curve and no palette. Red marks a saturated pixel.
+      grey = clamp(t * params.displayGain, 0.0, 1.0);
+      if (t * params.displayGain > 1.0) { tint = vec3f(0.6, 0.0, 0.0); }
+    } else if (params.viewMode == 2u) {
+      grey = clamp(d * params.displayGain, 0.0, 1.0);
+    } else if (params.viewMode == 3u) {
+      // Change: green where the trail is growing against its delayed copy, magenta where it is fading.
+      let rate = tanh(params.displayGain * (t - d) * 25.0);
+      grey = 0.08;
+      tint = vec3f(max(-rate, 0.0), max(rate, 0.0), max(-rate, 0.0) * 0.9 + max(rate, 0.0) * 0.3);
+    } else {
+      // Agents per pixel: 0 black, 8 or more white (the deposit saturates at 100).
+      let ix = min(u32(uv.x * size.x), params.width - 1u);
+      let iy = min(u32(uv.y * size.y), params.height - 1u);
+      grey = clamp(f32(counter[iy * params.width + ix]) / 8.0, 0.0, 1.0);
+    }
+    return vec4f(clamp(vec3f(grey) + tint, vec3f(0.0), vec3f(1.0)), 1.0);
+  }
 
   // 1. tone, 2. colour
   let v = tanh(params.displayGain * t);

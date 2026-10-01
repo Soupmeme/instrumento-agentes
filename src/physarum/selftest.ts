@@ -35,6 +35,7 @@ import { presetOfSlot } from './presets';
 import { flockChecks } from '../flock/selftest_flock';
 import { couplingChecks } from '../coupling/selftest_coupling';
 import { sceneHookChecks } from '../scenes/selftest_scenes';
+import { probeChecks } from './selftest_probe';
 import { fieldVector, stepFollower, KIND_NOISE_ANGLE, KIND_CURL, PEN_NONE, PEN_SWIRL, type FieldConfig, type FollowerConfig } from '../flow/flowfield.ts';
 
 export interface SelfTestResult {
@@ -206,6 +207,9 @@ async function runChecks(p: Physarum): Promise<SelfTestResult> {
 
   // ---- 9. World hooks used by the scene system ----
   checks.push(...(await sceneHookChecks(p)));
+
+  // ---- 10. Debug probes: what the sensor overlay shows, and the pointer pick ----
+  checks.push(...(await probeChecks(p)));
 
   // Leave the instrument as we found it, with a fresh random start.
   Object.assign(p.params, saved);

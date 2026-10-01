@@ -50,7 +50,7 @@ test('landing pairs decode to valid slots', () => {
   assert.deepEqual([lu.penSlot, lu.backgroundSlot], [11, 20]);
 });
 
-test('penMix is 1 at the pen, exp(-1) one sigma away, and 0 when the pen is off', () => {
+test('[PE-08] penMix is 1 at the pen, exp(-1) one sigma away, and 0 when the pen is off', () => {
   assert.equal(penMix(0, 0.3), 1);
   assert.ok(Math.abs(penMix(0.3, 0.3) - Math.exp(-1)) < 1e-12);
   assert.ok(penMix(3, 0.3) < 1e-30);

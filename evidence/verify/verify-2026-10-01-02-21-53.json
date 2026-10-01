@@ -1,0 +1,48 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-01T02:21:53.542Z",
+  "done": 1,
+  "total": 1,
+  "current": "TL-05",
+  "results": [
+    {
+      "id": "TL-05",
+      "family": "tools",
+      "change": "the probe compiled into the agent pass",
+      "origin": "new",
+      "pass": true,
+      "seconds": 7.9,
+      "values": {
+        "msPerStepOffMedian": 1.53,
+        "msPerStepOnMedian": 1.535,
+        "ratioPerRound": [
+          0.98,
+          0.989,
+          0.96,
+          1.03,
+          1.056,
+          0.988,
+          1.106,
+          1.055,
+          0.946,
+          0.964,
+          0.979,
+          0.935
+        ],
+        "medianChange": -0.012,
+        "spreadOfRounds": 0.095
+      }
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "failedIds": []
+  },
+  "adapter": "",
+  "grid": [
+    1043,
+    910
+  ],
+  "seed": 7
+}

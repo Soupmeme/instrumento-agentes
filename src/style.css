@@ -25,6 +25,34 @@ html, body {
   display: block;
 }
 
+#probe {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 12px;
+  pointer-events: none;
+  white-space: pre-wrap;
+  max-width: min(60ch, 90vw);
+}
+
+#view-label {
+  position: fixed;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 12px;
+  pointer-events: none;
+}
+
 #hud {
   position: fixed;
   top: 8px;

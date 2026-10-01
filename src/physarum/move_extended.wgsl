@@ -41,6 +41,7 @@ struct Ext {
 @group(0) @binding(4) var<uniform> ext: Ext;
 @group(0) @binding(5) var<storage, read_write> velocities: array<vec2f>;
 @group(0) @binding(6) var<storage, read> field: array<vec2f>; // flow field, read when flowBias > 0
+@group(0) @binding(7) var<storage, read_write> probe: array<f32>; // what the selected agent perceived and decided (sensor overlay, debug)
 
 fn fieldDims() -> vec2u { return vec2u(params.fieldW, params.fieldH); }
 
@@ -172,16 +173,18 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   let middle = senseAt(p, a.heading, sensorDistance);
   let right = senseAt(p, a.heading + sensorAngle, sensorDistance);
   var heading = a.heading;
+  var turn = 0.0;
   if (middle > left && middle > right) {
     // straight ahead wins: keep the heading
   } else if (middle < left && middle < right) {
     s = pcg(s);
-    if (to01(s) < 0.5) { heading -= rotationAngle; } else { heading += rotationAngle; }
+    if (to01(s) < 0.5) { turn = -rotationAngle; } else { turn = rotationAngle; }
   } else if (right < left) {
-    heading -= rotationAngle;
+    turn = -rotationAngle;
   } else if (left < right) {
-    heading += rotationAngle;
+    turn = rotationAngle;
   }
+  heading += turn;
 
   // Coupling: the flow field bends the heading (steering, see flow_bias.wgsl). Off at weight 0.
   heading = flowBiasedHeading(heading, moveDistance, p, size);
@@ -223,6 +226,25 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   let ix = min(u32(next.x), params.width - 1u);
   let iy = min(u32(next.y), params.height - 1u);
   atomicAdd(&counter[iy * params.width + ix], 1u);
+
+  // Sensor overlay (debug, key A): the selected agent writes down what it sensed and decided.
+  // Same layout as move.wgsl: the sensors are named by their side of the heading (plus = heading +
+  // SA, which is the "right" reading here), and word 5 is S, the trail under the agent.
+  if (i == params.probe) {
+    let h0 = a.heading;
+    probe[0] = f32(i);
+    probe[1] = f32(params.frame + 1u);
+    probe[2] = p.x; probe[3] = p.y; probe[4] = h0; probe[5] = S;
+    probe[6] = sensorDistance; probe[7] = sensorAngle; probe[8] = rotationAngle; probe[9] = moveDistance;
+    let plus = p + vec2f(cos(h0 + sensorAngle), sin(h0 + sensorAngle)) * sensorDistance;
+    let mid = p + vec2f(cos(h0), sin(h0)) * sensorDistance;
+    let minus = p + vec2f(cos(h0 - sensorAngle), sin(h0 - sensorAngle)) * sensorDistance;
+    probe[10] = plus.x; probe[11] = plus.y; probe[12] = right;
+    probe[13] = mid.x; probe[14] = mid.y; probe[15] = middle;
+    probe[16] = minus.x; probe[17] = minus.y; probe[18] = left;
+    probe[19] = turn;
+    probe[22] = next.x; probe[23] = next.y;
+  }
 
   a.pos = min(next / size, vec2f(0.99999994));
   a.heading = heading;
