@@ -5,6 +5,7 @@
 
 import type { Director } from './scenes/director';
 import type { SceneData } from './scenes/types';
+import { mmss } from './timer';
 
 function text(tag: string, cls: string, content: string): HTMLElement {
   const el = document.createElement(tag);
@@ -13,10 +14,6 @@ function text(tag: string, cls: string, content: string): HTMLElement {
   return el;
 }
 
-function mmss(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
 
 export class CuePanel {
   private clock = text('div', 'cue-clock', '--:--');

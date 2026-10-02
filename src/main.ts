@@ -13,6 +13,7 @@ import { actionForKey } from './scenes/keys';
 import { saveAutosave } from './scenes/storage';
 import { CuePanel } from './cue';
 import { buildHelp } from './help';
+import { OnScreenTimer } from './timer';
 import { SceneTools } from './scene_tools';
 import { Inspector } from './inspect';
 import { familyReadout } from './inspect_text';
@@ -108,6 +109,7 @@ const song = new Song({
 // triggers nothing (CLAUDE.md rule 2).
 const cue = new CuePanel(cueEl, () => director, () => (song.hasSong ? song.elapsed : null));
 buildHelp(helpEl);
+const timer = new OnScreenTimer($('timer'), () => (song.hasSong ? song.elapsed : null));
 
 // Edits made in the rehearsal panel are remembered by the current scene, and the scenes are
 // autosaved (a convenience: storage may be blocked, see scenes/storage.ts).
@@ -250,6 +252,7 @@ function frame(now: number): void {
 
   updatePenRing();
   cue.tick(now);
+  timer.tick(now);
   // While the rehearsal panel is open, keep its sliders in step with a transition or the wheel.
   if (!tuningEl.hidden && director && (director.progress !== null || director.intensity !== lastIntensity) && now - lastSliderRefresh > 200) {
     lastSliderRefresh = now;
@@ -378,6 +381,9 @@ function onKey(ev: KeyboardEvent): void {
       break;
     case 'cue':
       cue.toggle();
+      break;
+    case 'timer':
+      timer.toggle(performance.now());
       break;
     case 'fullscreen':
       toggleFullscreen();

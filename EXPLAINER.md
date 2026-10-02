@@ -488,6 +488,7 @@ The world is the canvas. A **scene** is a regime of that world, stored as data. 
 | R | Reset: agents scatter, trail clears, same scene |
 | S (and Escape) | Safe mode: 35% of the agents, followers and boids, 60% resolution. Again to leave. It also resumes a frozen picture |
 | H / C | Help overlay / cue panel |
+| K | On-screen timer (the song clock, else a stopwatch); display only |
 
 Rehearsal only: T rehearsal panel, P song panel, D debug readout, V flow arrows, G flock overlay, Enter full screen.
 

@@ -42,6 +42,7 @@ The page opens with a help overlay (H closes it) and the first scene. The whole 
 | R | Reset: agents scatter, trail clears, same scene |
 | S (or Esc) | Safe mode: fewer agents and a lower resolution, again to leave (in full screen the browser keeps Esc, so use S) |
 | H / C | Help overlay / cue panel (current and next scene, the song's clock, the scene list) |
+| K | On-screen timer, small at the top centre: the song's clock once the song plays, otherwise a stopwatch that starts when you switch it on. Display only, nothing reads it |
 
 No key needs Shift, Ctrl or Alt. **S** (safe mode) keeps 35% of the agents and the picture, and does not restart it; press it again to return. For rehearsal only: **T** the rehearsal panel (every parameter of the current scene, with what each does and what was measured; capture the live state as a scene, export and import scenes as JSON, rehearse a transition), **P** the song panel, **D** the debug readout, **V** the flow field arrows, **G** the flock overlay (the boid nearest the pointer, its neighbours and view cone), **A** the sensors of the Physarum agent nearest the pointer (what its three sensors read and what it decided), **O** the raw buffers (trail, delayed trail, change, agents per pixel), **Enter** full screen.
 

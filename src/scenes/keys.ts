@@ -2,7 +2,7 @@
 // unit tested: every binding is a single key, none uses a modifier, and no two share a key.
 //
 // Live vocabulary (the performer's left hand): Space next, B previous, 1 to 9 jump, F freeze,
-// R reset, S safe mode (Escape too, when the browser passes it on: in full screen the browser
+// R reset, K on-screen timer (display only), S safe mode (Escape too, when the browser passes it on: in full screen the browser
 // keeps Escape for leaving full screen), H help, C cue panel. Rehearsal and debug keys are
 // separate and never needed in a performance: Enter full screen, T tuning panel, P setup
 // panel, D debug readout, V flow field arrows, G flock overlay, A agent sensors, O buffer views.
@@ -16,6 +16,7 @@ export type Action =
   | { type: 'safe' }
   | { type: 'help' }
   | { type: 'cue' }
+  | { type: 'timer' }
   | { type: 'fullscreen' }
   | { type: 'tuning' }
   | { type: 'setup' }
@@ -35,6 +36,7 @@ export const BINDINGS: Readonly<Record<string, Action>> = {
   Escape: { type: 'safe' },
   h: { type: 'help' },
   c: { type: 'cue' },
+  k: { type: 'timer' },
   Enter: { type: 'fullscreen' },
   t: { type: 'tuning' },
   p: { type: 'setup' },
@@ -56,6 +58,7 @@ export const LIVE_KEYS: readonly (readonly [string, string])[] = [
   ['S', 'safe mode: fewer agents, lower resolution (again to leave)'],
   ['H', 'this help'],
   ['C', 'cue panel'],
+  ['K', 'on-screen timer (the song clock, else a stopwatch)'],
 ];
 
 export interface KeyLike {
