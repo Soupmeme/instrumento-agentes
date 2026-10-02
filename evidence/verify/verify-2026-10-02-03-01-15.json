@@ -1,0 +1,35 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-02T03:01:15.733Z",
+  "done": 1,
+  "total": 1,
+  "current": "PR-05",
+  "results": [
+    {
+      "id": "PR-05",
+      "family": "presentation",
+      "change": "safe mode (the counts at 35%)",
+      "origin": "new",
+      "pass": true,
+      "seconds": 3.3,
+      "values": {
+        "msPerStepFull": 3.213,
+        "msPerStepSafe": 1.475,
+        "medianRatio": 0.464,
+        "slowRoundRatio": 0.477,
+        "spreadOfRounds": 0.173
+      }
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "failedIds": []
+  },
+  "adapter": "",
+  "grid": [
+    1026,
+    899
+  ],
+  "seed": 7
+}

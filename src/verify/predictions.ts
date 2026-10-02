@@ -358,7 +358,28 @@ export const PREDICTIONS: Prediction[] = [
   },
   {
     id: 'SC-07', family: 'scenes', change: 'scenes.json', origin: 'earlier',
-    statement: 'A scene file can never break the instrument: values are clamped or dropped and the validator never throws; the three shipped scenes are all marked PLACEHOLDER.',
+    statement: 'A scene file can never break the instrument: values are clamped or dropped and the validator never throws; the placeholder test set is all marked PLACEHOLDER.',
+    cpu: true,
+  },
+
+  {
+    id: 'SC-08', family: 'scenes', change: 'the wheel, in each shipped scene', origin: 'new',
+    statement: 'Turning the wheel from 0 to 1 makes a visible difference in each shipped scene (image difference of at least 0.03).',
+    gpu: true,
+  },
+  {
+    id: 'SC-09', family: 'scenes', change: 'the pen, in each shipped scene', origin: 'new',
+    statement: 'The pen changes the picture mostly where it is in each shipped scene: the difference inside the circle is at least 0.03 and at least 2 times the difference outside.',
+    gpu: true,
+  },
+  {
+    id: 'SC-10', family: 'scenes', change: 'the click, in each shipped scene', origin: 'new',
+    statement: 'The click is visible in each shipped scene: either 30 steps after it the trail differs from a run without the click by at least 0.02, or 6 steps after it the picture on the screen does (the warm glow of the click exists only on the screen).',
+    gpu: true,
+  },
+  {
+    id: 'SC-11', family: 'scenes', change: 'the shipped scenes.json', origin: 'new',
+    statement: 'The shipped scenes are the performer own set: valid, none marked as a placeholder, each with a documented pen and wheel and a click, inside the safe ranges found in M4 and M5, and only the Rupture scene is a hard cut.',
     cpu: true,
   },
 
@@ -387,8 +408,8 @@ export const PREDICTIONS: Prediction[] = [
   },
   {
     id: 'PR-05', family: 'presentation', change: 'safe mode (the counts at 35%)', origin: 'new',
-    history: 'M6 measured a saving of only about 30% and predicted 2.5 times; this one was predicted at 1.8 times and measured on an idle machine, where the flock pass (which grows with the square of the boid count) is most of the cost.',
-    statement: 'Safe mode cuts the step time of the heaviest configuration (1M extended agents, 500k followers, 100k boids) to at most 55% of full quality (median of alternating rounds).',
+    history: 'The first version also demanded that the rounds agree within 0.2 and reported "inconclusive" on a run with a median ratio of 0.44 and a spread of 0.26; the bound is an upper limit, so it is now the 75th percentile that must be under it. M6 measured a saving of only about 30% and predicted 2.5 times; this one was predicted at 1.8 times and measured on an idle machine, where the flock pass (which grows with the square of the boid count) is most of the cost.',
+    statement: 'Safe mode cuts the step time of the heaviest configuration (1M extended agents, 500k followers, 100k boids) to at most 55% of full quality (the 75th percentile of 8 alternating rounds).',
     gpu: true,
   },
   {

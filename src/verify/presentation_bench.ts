@@ -13,9 +13,12 @@ import type { Physarum } from '../physarum/physarum';
 import type { Director } from '../scenes/director';
 import type { SceneData } from '../scenes/types';
 import { MODE_EXTENDED, modeDefaults } from '../physarum/params';
+import { placeholderScenes, shippedScenes } from '../scenes/index';
 
 export interface BenchOptions {
   scene: number | 'heavy';
+  /** Which scenes a numeric `scene` indexes: the three placeholders (default, the numbers of M8) or the shipped set. */
+  set?: 'placeholder' | 'shipped';
   /** Safe mode: the counts scaled as the S key does (the canvas scale is the page's, set with ?res and the S key). */
   safe?: boolean;
   blocks?: number;
@@ -34,6 +37,7 @@ export async function presentationBench(p: Physarum, o: BenchOptions) {
   const savedScale = p.countScale;
   const wasPaused = p.paused;
   const savedIndex = director.index;
+  const savedScenes = [...director.scenes] as SceneData[];
   p.paused = true;
   try {
     if (o.scene === 'heavy') {
@@ -42,7 +46,7 @@ export async function presentationBench(p: Physarum, o: BenchOptions) {
         followerCount: 500_000, fieldKind: 1, flockCount: 100_000, flowToPhysarum: 0.25,
       });
     } else {
-      director.setScenes(director.scenes as SceneData[], o.scene);
+      director.setScenes(o.set === 'shipped' ? shippedScenes() : placeholderScenes(), o.scene);
     }
     p.countScale = o.safe ? 0.35 : 1;
     p.setPen(0.5, 0.5, false);
@@ -97,7 +101,7 @@ export async function presentationBench(p: Physarum, o: BenchOptions) {
   } finally {
     p.countScale = savedScale;
     p.wantTimings = false;
-    director.setScenes(director.scenes as SceneData[], savedIndex);
+    director.setScenes(savedScenes, savedIndex);
     p.reset();
     p.paused = wasPaused;
   }

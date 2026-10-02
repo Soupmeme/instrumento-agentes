@@ -11,7 +11,9 @@ import { Director, resolveScene, penScale, STEPS_PER_SECOND, PEN_SCALE_MAX, PEN_
 import { actionForKey, BINDINGS, LIVE_KEYS } from '../src/scenes/keys.ts';
 import type { SceneData } from '../src/scenes/types.ts';
 
-const shipped = JSON.parse(readFileSync(new URL('../src/scenes/scenes.json', import.meta.url), 'utf8'));
+// The engine's tests run on the three PLACEHOLDER scenes (scenes.placeholder.json); the performer's own set is scenes.json (checked at the end of this file).
+const shipped = JSON.parse(readFileSync(new URL('../src/scenes/scenes.placeholder.json', import.meta.url), 'utf8'));
+const performers = JSON.parse(readFileSync(new URL('../src/scenes/scenes.json', import.meta.url), 'utf8'));
 
 function loadShipped(): SceneData[] {
   const r = validateScenes(shipped);
@@ -51,7 +53,7 @@ test('curves: 0 to 0, 1 to 1, monotonic, clamped, and the named shapes', () => {
   assert.ok(curve('in', 0.5) < 0.5 && curve('out', 0.5) > 0.5 && curve('smooth', 0.5) === 0.5);
 });
 
-test('[SC-07] the shipped scenes.json is valid, has three scenes, and every one is marked PLACEHOLDER', () => {
+test('[SC-07] the placeholder test set is valid, has three scenes, and every one is marked PLACEHOLDER', () => {
   const scenes = loadShipped();
   assert.equal(scenes.length, 3);
   for (const s of scenes) {
@@ -64,7 +66,7 @@ test('[SC-07] the shipped scenes.json is valid, has three scenes, and every one 
   assert.equal(new Set(scenes.map((s) => s.dominant)).size, 3, 'each scene has a different dominant family');
 });
 
-test('the shipped scenes stay inside the safe ranges found in M4 and M5', () => {
+test('the placeholder scenes stay inside the safe ranges found in M4 and M5', () => {
   for (const s of loadShipped()) {
     for (const v of [0, 0.5, 1]) {
       const p = resolveScene(s, v);
@@ -467,4 +469,32 @@ test('a scene key in the middle of a palette crossfade commits the nearer palett
   assert.equal(host.params.palette, 1, 'the palette being faded toward is committed');
   assert.equal(host.params.paletteMix, 0);
   assert.equal(host.params.paletteB, 5);
+});
+
+
+// ---------------------------------------------------------------- the performer's own scenes (scenes.json)
+test('[SC-11] the shipped scenes.json is the performer own set: valid, no placeholders, documented, in the safe ranges, one hard cut', () => {
+  const r = validateScenes(performers);
+  assert.deepEqual(r.problems, [], 'scenes.json has no problems');
+  const scenes = r.scenes;
+  assert.deepEqual(scenes.map((x) => x.id), ['gc-plead', 'gc-rupture', 'gc-retreat', 'gc-watching', 'gc-return']);
+  assert.equal(new Set(scenes.map((x) => x.name)).size, scenes.length, 'names are distinct');
+  for (const sc of scenes) {
+    assert.ok(!sc.placeholder, `${sc.id} is not a placeholder`);
+    assert.ok(!/placeholder|draft/i.test(sc.name + sc.note), `${sc.id} says draft or placeholder`);
+    assert.ok(sc.pen.description.length > 10 && sc.macro.description.length > 10, `${sc.id} documents its pen and its wheel`);
+    assert.ok(sc.macro.entries.length >= 1 && sc.macro.entries.length <= 4, `${sc.id} wheel moves one to four parameters`);
+    for (const v of [0, 0.5, 1]) {
+      const p = resolveScene(sc, v);
+      assert.ok(p.flockCohWeight < p.flockSepWeight, `${sc.id} at ${v}: cohesion below separation`);
+      assert.ok(p.trailToBoids <= 1.5, `${sc.id} at ${v}: trail -> boids below its cliff`);
+      assert.ok(p.flowToPhysarum <= 0.6 + 1e-9 || sc.id === 'gc-rupture' && p.flowToPhysarum <= 0.8 + 1e-9, `${sc.id} at ${v}: flow steering within range`);
+      assert.ok(p.flockCount <= 150000 && p.followerCount <= 1000000 && p.agentCount <= 2000000, `${sc.id} at ${v}: counts within the limits`);
+    }
+  }
+  // Only the Rupture scene is a hard cut (a screams is one key press in and one out); the others melt.
+  for (const sc of scenes) assert.equal(sc.entry.seconds <= 0.1, sc.id === 'gc-rupture', `${sc.id} entry seconds ${sc.entry.seconds}`);
+  // The four soft scenes each have their own palette or preset, so none is invisible next to its neighbour.
+  const looks = scenes.map((x) => `${x.params.backgroundPreset}/${x.params.palette}/${x.params.agentCount}`);
+  assert.equal(new Set(looks).size, scenes.length, 'every scene has its own look');
 });

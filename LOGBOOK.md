@@ -264,6 +264,14 @@ Kiwi chose these two out of M8; the 20 minute run, device-loss recovery and the 
 
 **Not verified:** any GPU other than this one (the projector's GPU and resolution are unknown); a real full-screen switch (the browser pane does not enter full screen; the resize is checked directly, from 1026 x 899 to 1000 x 750); the look of the upscaled picture on a real projector; safe mode's canvas scale on a slow GPU (it saves nothing measurable here); the 20 minute run, device-loss recovery and quality presets (not started); the cost of the probe against the M6 build (from M7).
 
+## 2026-10-01, God Complex: the song's scenes become the shipped set
+
+From `SONG_BRIEF.md` (written with Kiwi, his words kept verbatim; the lyrics are not stored in the repository). Five scenes, performed 1, 2, 3, 2, 3, 4, 2, 5, 2, 5 and the wheel down: Plead (verse 1), Rupture (each scream, a hard cut by Kiwi's decision, against Claude's recommendation of a click), Retreat, Watching (verse 2) and Return (heavier, to the fade). Looks were tried on the GPU and judged in stills; Kiwi's notes on draft 1 (too many beads, a brush that gathered beads) changed the boids to faint lights, the pens to second Physarum presets, and Watching to separate glowing orbs. The click means something different in each scene, fixed per scene. An on-screen timer (key K: the song clock, else a stopwatch) was added at his request. A new display-only `accent.glow` recolours growing trail toward the palette's accent colour for a second after a click.
+
+**Tests:** unit tests 145 (SC-11 holds the shipped file to the rules; the engine's tests run on `scenes.placeholder.json`); self-test 77 of 77; GPU checks 46, of which 45 pass in the latest runs. SC-08 (wheel) and SC-10 (click, measured on the trail and on the screen) pass for all five scenes; **SC-09 fails**: the pen has an effect in all five (0.13 to 0.25 inside its circle) but is less local than the 2 times threshold in Rupture (1.9), Retreat (2.0) and Return (1.75). The first run of SC-10 found Retreat's click too quiet (a trail difference of 0.001, 0.008 on the screen), so it was strengthened to 0.027.
+
+**Not verified:** how any of it feels and moves (judged in stills and by Kiwi at the screen, not measured); the timings of the screams against a real song (about 2:10 and 2:19 are estimates); the timer against a real song clock; the five scenes on any other GPU or on the projector; a rehearsal-length run of the five scenes (the scene soak was not run on them).
+
 ---
 
 ## Self-evaluation (Autoevaluación)

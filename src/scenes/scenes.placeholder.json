@@ -1,0 +1,207 @@
+[
+  {
+    "id": "placeholder-calm",
+    "name": "PLACEHOLDER: calm",
+    "note": "PLACEHOLDER to test the engine, not a real scene. Slow mycelium drifting, the network barely moving. Replace with your own scenes.",
+    "placeholder": true,
+    "dominant": "physarum",
+    "params": {
+      "mode": 1,
+      "backgroundPreset": 21,
+      "penPreset": 4,
+      "agentCount": 600000,
+      "decay": 0.8,
+      "inertia": 0.1,
+      "followerCount": 20000,
+      "followerDeposit": 0.02,
+      "fieldKind": 1,
+      "fieldStrength": 0.6,
+      "fieldEvolution": 0.04,
+      "flowToPhysarum": 0.25,
+      "flockCount": 0,
+      "palette": 0,
+      "changeColour": 0.4,
+      "penFieldMode": 1
+    },
+    "pen": {
+      "radius": 0.22,
+      "description": "PLACEHOLDER: the pen wakes the network, a denser net grows inside the circle and the flow swirls around it."
+    },
+    "macro": {
+      "entry": 0.5,
+      "description": "PLACEHOLDER: up makes the network a little denser and lets the flow pull slightly harder, down lets it thin and drift.",
+      "returnSeconds": 0,
+      "entries": [
+        {
+          "param": "decay",
+          "min": 0.78,
+          "max": 0.82,
+          "curve": "smooth"
+        },
+        {
+          "param": "flowToPhysarum",
+          "min": 0.1,
+          "max": 0.22,
+          "curve": "in"
+        },
+        {
+          "param": "agentCount",
+          "min": 520000,
+          "max": 660000,
+          "curve": "out"
+        }
+      ]
+    },
+    "accent": {
+      "type": "wave",
+      "strength": 0.5,
+      "size": 1
+    },
+    "entry": {
+      "seconds": 1.5,
+      "easing": "smooth",
+      "burst": "none",
+      "switchAt": 0.5
+    }
+  },
+  {
+    "id": "placeholder-dense",
+    "name": "PLACEHOLDER: dense",
+    "note": "PLACEHOLDER to test the engine, not a real scene. A crowded swarm riding the veins, warm and busy. Replace with your own scenes.",
+    "placeholder": true,
+    "dominant": "flock",
+    "params": {
+      "mode": 1,
+      "backgroundPreset": 14,
+      "penPreset": 2,
+      "agentCount": 500000,
+      "decay": 0.72,
+      "followerCount": 60000,
+      "followerDeposit": 0.02,
+      "fieldKind": 1,
+      "fieldStrength": 1,
+      "fieldEvolution": 0.1,
+      "flowToPhysarum": 0.4,
+      "flockCount": 30000,
+      "flockSepWeight": 2,
+      "flockAliWeight": 1.5,
+      "flockCohWeight": 0.8,
+      "flockSpeed": 2.5,
+      "flockPenMode": 2,
+      "flockPenStrength": 3,
+      "trailToBoids": 1,
+      "palette": 1,
+      "changeColour": 0.7,
+      "penFieldMode": 1
+    },
+    "pen": {
+      "radius": 0.2,
+      "description": "PLACEHOLDER: the pen is a predator, the swarm parts around the circle while the net inside it changes rules."
+    },
+    "macro": {
+      "entry": 0.5,
+      "description": "PLACEHOLDER: up makes the swarm faster and tighter and brings more followers, down loosens and slows it.",
+      "returnSeconds": 0,
+      "entries": [
+        {
+          "param": "flockCohWeight",
+          "min": 0.4,
+          "max": 0.9,
+          "curve": "smooth"
+        },
+        {
+          "param": "flockSpeed",
+          "min": 2.0,
+          "max": 3.0,
+          "curve": "linear"
+        },
+        {
+          "param": "followerCount",
+          "min": 40000,
+          "max": 90000,
+          "curve": "out"
+        }
+      ]
+    },
+    "accent": {
+      "type": "burst",
+      "strength": 0.8,
+      "size": 1
+    },
+    "entry": {
+      "seconds": 1.2,
+      "easing": "smooth",
+      "burst": "ring",
+      "switchAt": 0.5
+    }
+  },
+  {
+    "id": "placeholder-scattered",
+    "name": "PLACEHOLDER: scattered",
+    "note": "PLACEHOLDER to test the engine, not a real scene. Sparse strokes drawn by the flow across a cool, empty field. Replace with your own scenes.",
+    "placeholder": true,
+    "dominant": "followers",
+    "params": {
+      "mode": 1,
+      "backgroundPreset": 13,
+      "penPreset": 15,
+      "agentCount": 150000,
+      "decay": 0.7,
+      "followerCount": 150000,
+      "followerDeposit": 0.03,
+      "followerSpeed": 2.5,
+      "fieldKind": 1,
+      "fieldFrequency": 5,
+      "fieldStrength": 1,
+      "fieldEvolution": 0.25,
+      "flowToPhysarum": 0.6,
+      "flockCount": 6000,
+      "flockPenMode": 2,
+      "flockPenStrength": 4,
+      "trailToBoids": 0.5,
+      "palette": 5,
+      "changeColour": 0.6,
+      "penFieldMode": 3
+    },
+    "pen": {
+      "radius": 0.25,
+      "description": "PLACEHOLDER: the pen repels the flow, strokes bend away from the circle and leave a quiet hole."
+    },
+    "macro": {
+      "entry": 0.5,
+      "description": "PLACEHOLDER: up makes the flow churn faster and the strokes longer, down calms the field to slow curls.",
+      "returnSeconds": 0,
+      "entries": [
+        {
+          "param": "fieldEvolution",
+          "min": 0.08,
+          "max": 0.45,
+          "curve": "in"
+        },
+        {
+          "param": "followerSpeed",
+          "min": 1.8,
+          "max": 3.4,
+          "curve": "smooth"
+        },
+        {
+          "param": "decay",
+          "min": 0.66,
+          "max": 0.76,
+          "curve": "linear"
+        }
+      ]
+    },
+    "accent": {
+      "type": "ring",
+      "strength": 0.7,
+      "size": 1.3
+    },
+    "entry": {
+      "seconds": 2,
+      "easing": "smooth",
+      "burst": "none",
+      "switchAt": 0.5
+    }
+  }
+]

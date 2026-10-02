@@ -22,6 +22,7 @@ import { CURATED_SLOTS } from '../physarum/presets';
 import type * as X from '../physarum/experiments';
 import { couplingStats as couplingStatsFn } from '../coupling/experiments_coupling';
 import { sceneTest, transitionTest } from '../scenes/experiments_scenes';
+import { placeholderScenes } from '../scenes/index';
 import { sweepShots } from './sweep_shots';
 import { PREDICTIONS, type Family } from './predictions';
 
@@ -472,9 +473,23 @@ export const GPU_CHECKS: Record<string, GpuCheck> = {
     const rows = await sceneRows(t);
     return { pass: rows.every((row) => row.accent.difference30StepsAfter >= 0.02), values: { scenes: rows.map((row) => ({ scene: row.scene, type: row.accent.type, difference: row.accent.difference30StepsAfter })) } };
   },
+  'SC-08': async (t) => {
+    const rows = await shippedRows(t);
+    return { pass: rows.every((row) => row.wheel.imageDifference0to1 >= 0.03), values: { scenes: rows.map((row) => ({ scene: row.scene, wheelDifference: row.wheel.imageDifference0to1 })) } };
+  },
+  'SC-09': async (t) => {
+    const rows = await shippedRows(t);
+    return { pass: rows.every((row) => row.pen.inside >= 0.03 && row.pen.inside >= 2 * row.pen.outside), values: { scenes: rows.map((row) => ({ scene: row.scene, inside: row.pen.inside, outside: row.pen.outside })) } };
+  },
+  'SC-10': async (t) => {
+    const rows = await shippedRows(t);
+    // The click is seen on the trail 30 steps later (a wave, a burst, a ring) or on the screen a few steps after it (the warm glow exists only in the display).
+    const seen = (row: SceneRow) => Math.max(row.accent.difference30StepsAfter, row.accent.onScreen6StepsAfter);
+    return { pass: rows.every((row) => seen(row) >= 0.02), values: { scenes: rows.map((row) => ({ scene: row.scene, type: row.accent.type, trailAt30Steps: row.accent.difference30StepsAfter, screenAt6Steps: row.accent.onScreen6StepsAfter })) } };
+  },
   'SC-05': async (t) => {
     const worst: number[] = [];
-    for (const [from, to] of [[0, 1], [1, 2], [2, 0]]) worst.push(Number((await transitionTest(t.p, from, to)).transitionMaxStepChange));
+    for (const [from, to] of [[0, 1], [1, 2], [2, 0]]) worst.push(Number((await transitionTest(t.p, from, to, { set: 'placeholder' })).transitionMaxStepChange));
     return { pass: worst.every((w) => w < 0.05), values: { largestStepChangeOfMeanTrail: worst } };
   },
 
@@ -493,7 +508,9 @@ export const GPU_CHECKS: Record<string, GpuCheck> = {
       return sum / tr.length;
     };
     const saved = { ...p.params };
-    director.setScenes(director.scenes, 1);
+    const savedScenes = [...director.scenes];
+    const savedIndex = (director as unknown as { index: number }).index;
+    director.setScenes(placeholderScenes(), 1); // the dense placeholder scene, not the performer's
     p.paused = false; // the live loop runs, as in a performance
     p.reset(7);
     await frames(240); // four simulated seconds
@@ -515,6 +532,7 @@ export const GPU_CHECKS: Record<string, GpuCheck> = {
       pass = pass && p.gridWidth === grid0[0] && p.gridHeight === grid0[1] && last > 0.3 * before;
       out[`${label}MeanBeforeAfter`] = [r(before, 5), r(last, 5)];
     }
+    director.setScenes(savedScenes, savedIndex);
     Object.assign(p.params, saved);
     const back = await mean();
     out.worstChangePerFrame = r(worst, 4);
@@ -558,10 +576,14 @@ export const GPU_CHECKS: Record<string, GpuCheck> = {
       const ratio = median(ratios);
       const sorted = [...ratios].sort((x, y) => x - y);
       const spread = sorted[6] - sorted[1];
+      // The claim is an upper bound, so it is established when even the slower rounds are under it: the 75th
+      // percentile of the 8 rounds (the 6th lowest) must be at most 0.55. (The first version also demanded a
+      // spread under 0.2, which failed a run with a median of 0.44 on a noisy machine: with this much margin a wide
+      // spread does not weaken the bound.)
+      const slow = sorted[5];
       return {
-        pass: ratio <= 0.55 && spread < 0.2,
-        values: { msPerStepFull: r(median(full), 3), msPerStepSafe: r(median(safe), 3), medianRatio: r(ratio, 3), spreadOfRounds: r(spread, 3) },
-        note: spread >= 0.2 ? 'inconclusive: the rounds disagree (is another program using the GPU?)' : undefined,
+        pass: slow <= 0.55,
+        values: { msPerStepFull: r(median(full), 3), msPerStepSafe: r(median(safe), 3), medianRatio: r(ratio, 3), slowRoundRatio: r(slow, 3), spreadOfRounds: r(spread, 3) },
       };
     } finally {
       p.countScale = savedScale;
@@ -574,13 +596,14 @@ export const GPU_CHECKS: Record<string, GpuCheck> = {
     const { p } = t;
     const director = (window as unknown as { __director?: { setScenes: (s: unknown[], i: number) => void; scenes: unknown[]; index: number } }).__director!;
     const savedIndex = director.index;
+    const savedScenes = [...director.scenes];
     const saved = { ...p.params };
     p.paused = true;
     const out: Record<string, unknown> = {};
     let pass = true;
     try {
       for (const kind of ['dense', 'heavy'] as const) {
-        if (kind === 'dense') director.setScenes(director.scenes, 1);
+        if (kind === 'dense') director.setScenes(placeholderScenes(), 1);
         else Object.assign(p.params, extendedSet({ agentCount: 1_000_000, followerCount: 500_000, fieldKind: 1, flockCount: 100_000, flowToPhysarum: 0.25 }));
         p.setPen(0.5, 0.5, false);
         p.reset(7);
@@ -595,7 +618,7 @@ export const GPU_CHECKS: Record<string, GpuCheck> = {
       }
       return { pass, values: out };
     } finally {
-      director.setScenes(director.scenes, savedIndex);
+      director.setScenes(savedScenes, savedIndex);
       Object.assign(p.params, saved);
       p.reset();
       p.paused = false;
@@ -751,12 +774,19 @@ type SceneRow = {
   scene: string;
   wheel: { imageDifference0to1: number; dominantFamily: string[] };
   pen: { inside: number; outside: number };
-  accent: { type: string; difference30StepsAfter: number };
+  accent: { type: string; difference30StepsAfter: number; onScreen6StepsAfter: number };
 };
 let effectsScene: unknown[] | null = null;
 async function sceneRows(t: Tools): Promise<SceneRow[]> {
-  effectsScene ??= await sceneTest(t.p, t.x.analyzeTrail);
+  effectsScene ??= await sceneTest(t.p, t.x.analyzeTrail, { set: 'placeholder' });
   return effectsScene as unknown as SceneRow[];
+}
+
+// The three checks of the performer's own scenes (SPEC 8.8) share one run of sceneTest on the shipped set.
+let shippedScene: unknown[] | null = null;
+async function shippedRows(t: Tools): Promise<SceneRow[]> {
+  shippedScene ??= await sceneTest(t.p, t.x.analyzeTrail, { set: 'shipped' });
+  return shippedScene as unknown as SceneRow[];
 }
 
 export interface VerifyJob {
@@ -785,6 +815,7 @@ export function runVerify(t: Tools, which?: string[] | string): VerifyJob {
   (window as unknown as { __verify: VerifyJob }).__verify = job;
   effectsCache = null;
   effectsScene = null;
+  shippedScene = null;
   void (async () => {
     try {
       for (const p of wanted) {

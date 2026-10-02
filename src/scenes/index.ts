@@ -2,8 +2,8 @@
 // problem in the file is logged, never fatal: a scene that cannot be rescued is dropped, and if
 // nothing is left a single default scene keeps the instrument alive.
 
-import placeholders from './scenes.json';
-import godComplex from './scenes.god-complex.json';
+import shipped from './scenes.json';
+import placeholders from './scenes.placeholder.json';
 import { validateScenes } from './validate.ts';
 import type { SceneData } from './types.ts';
 
@@ -20,12 +20,23 @@ const fallback: SceneData = {
 };
 
 /**
- * Which set starts the instrument. scenes.json (the placeholders the tests and the checks use) is
- * the default; `?set=god-complex` starts the draft scenes of SONG_BRIEF.md, until Kiwi approves them
- * and they replace the placeholders.
+ * Which set starts the instrument. scenes.json is the performer's set (the God Complex scenes of
+ * SONG_BRIEF.md). scenes.placeholder.json is the three PLACEHOLDER scenes the engine's tests and
+ * checks use; `?set=placeholder` in the address starts the instrument with them (a rehearsal and
+ * development aid, never needed in a performance).
  */
 const chosen = (): unknown =>
-  typeof location !== 'undefined' && new URLSearchParams(location.search).get('set') === 'god-complex' ? godComplex : placeholders;
+  typeof location !== 'undefined' && new URLSearchParams(location.search).get('set') === 'placeholder' ? placeholders : shipped;
+
+/** The three placeholder scenes, validated, for the dev checks (they must not depend on the performer's scenes). */
+export function placeholderScenes(): SceneData[] {
+  return validateScenes(placeholders).scenes;
+}
+
+/** The performer's shipped scenes, validated (scenes.json), whichever set the page started with. */
+export function shippedScenes(): SceneData[] {
+  return validateScenes(shipped).scenes;
+}
 
 export function loadShippedScenes(data: unknown = chosen()): { scenes: SceneData[]; problems: string[] } {
   const r = validateScenes(data);
@@ -53,12 +64,7 @@ export function onScenesFileChanged(callback: Listener): void {
 // Vite only recognises a dependency accept at module level, inside this exact form.
 if (import.meta.hot) {
   import.meta.hot.accept('./scenes.json', (mod) => {
-    if (!mod) return;
-    const r = loadShippedScenes((mod as unknown as { default: unknown }).default);
-    window.dispatchEvent(new CustomEvent(EVENT, { detail: { scenes: r.scenes, problems: r.problems } }));
-  });
-  import.meta.hot.accept('./scenes.god-complex.json', (mod) => {
-    if (!mod) return;
+    if (!mod || new URLSearchParams(location.search).get('set') === 'placeholder') return; // a placeholder session ignores edits to the performer's file
     const r = loadShippedScenes((mod as unknown as { default: unknown }).default);
     window.dispatchEvent(new CustomEvent(EVENT, { detail: { scenes: r.scenes, problems: r.problems } }));
   });

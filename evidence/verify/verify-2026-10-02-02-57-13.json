@@ -1,0 +1,237 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-02T02:57:13.949Z",
+  "done": 7,
+  "total": 7,
+  "current": "SC-10",
+  "results": [
+    {
+      "id": "SC-01",
+      "family": "scenes",
+      "change": "the wheel, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 8.1,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "wheelDifference": 0.255,
+            "dominant": [
+              "physarum",
+              "physarum",
+              "physarum"
+            ]
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "wheelDifference": 0.087,
+            "dominant": [
+              "physarum",
+              "physarum",
+              "physarum"
+            ]
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "wheelDifference": 0.245,
+            "dominant": [
+              "followers",
+              "followers",
+              "followers"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-02",
+      "family": "scenes",
+      "change": "the pen, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "inside": 0.231,
+            "outside": 0.082
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "inside": 0.157,
+            "outside": 0.031
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "inside": 0.22,
+            "outside": 0.054
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-03",
+      "family": "scenes",
+      "change": "the click, in each placeholder scene",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 0,
+      "values": {
+        "scenes": [
+          {
+            "scene": "PLACEHOLDER: calm",
+            "type": "wave",
+            "difference": 0.039
+          },
+          {
+            "scene": "PLACEHOLDER: dense",
+            "type": "burst",
+            "difference": 0.053
+          },
+          {
+            "scene": "PLACEHOLDER: scattered",
+            "type": "ring",
+            "difference": 0.039
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-05",
+      "family": "scenes",
+      "change": "a scene key (Space, B, 1 to 9)",
+      "origin": "earlier",
+      "pass": true,
+      "seconds": 10.7,
+      "values": {
+        "largestStepChangeOfMeanTrail": [
+          0.008,
+          0.0028,
+          0.0082
+        ]
+      }
+    },
+    {
+      "id": "SC-08",
+      "family": "scenes",
+      "change": "the wheel, in each shipped scene",
+      "origin": "new",
+      "pass": true,
+      "seconds": 6.4,
+      "values": {
+        "scenes": [
+          {
+            "scene": "Plead",
+            "wheelDifference": 0.224
+          },
+          {
+            "scene": "Rupture",
+            "wheelDifference": 0.209
+          },
+          {
+            "scene": "Retreat",
+            "wheelDifference": 0.157
+          },
+          {
+            "scene": "Watching",
+            "wheelDifference": 0.2
+          },
+          {
+            "scene": "Return",
+            "wheelDifference": 0.427
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-09",
+      "family": "scenes",
+      "change": "the pen, in each shipped scene",
+      "origin": "new",
+      "pass": false,
+      "seconds": 0,
+      "values": {
+        "scenes": [
+          {
+            "scene": "Plead",
+            "inside": 0.188,
+            "outside": 0.073
+          },
+          {
+            "scene": "Rupture",
+            "inside": 0.161,
+            "outside": 0.084
+          },
+          {
+            "scene": "Retreat",
+            "inside": 0.129,
+            "outside": 0.065
+          },
+          {
+            "scene": "Watching",
+            "inside": 0.195,
+            "outside": 0.066
+          },
+          {
+            "scene": "Return",
+            "inside": 0.254,
+            "outside": 0.145
+          }
+        ]
+      }
+    },
+    {
+      "id": "SC-10",
+      "family": "scenes",
+      "change": "the click, in each shipped scene",
+      "origin": "new",
+      "pass": false,
+      "seconds": 0,
+      "values": {
+        "scenes": [
+          {
+            "scene": "Plead",
+            "type": "wave",
+            "difference": 0.003
+          },
+          {
+            "scene": "Rupture",
+            "type": "ring",
+            "difference": 0.067
+          },
+          {
+            "scene": "Retreat",
+            "type": "wave",
+            "difference": 0.001
+          },
+          {
+            "scene": "Watching",
+            "type": "ring",
+            "difference": 0.067
+          },
+          {
+            "scene": "Return",
+            "type": "burst",
+            "difference": 0.092
+          }
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 2,
+    "failedIds": [
+      "SC-09",
+      "SC-10"
+    ]
+  },
+  "adapter": "",
+  "grid": [
+    1026,
+    899
+  ],
+  "seed": 7
+}

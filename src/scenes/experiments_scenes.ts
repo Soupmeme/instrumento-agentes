@@ -17,6 +17,11 @@ import type { SceneData } from './types';
 import type { TrailStats } from '../physarum/experiments';
 import { MODE_EXTENDED } from '../physarum/params';
 import { countScaleFor } from '../physarum/extended.ts';
+import { placeholderScenes, shippedScenes } from './index.ts';
+
+/** Which scenes an experiment runs on: the performer's shipped set (default) or the three placeholders the regression checks use. */
+export type SceneSet = 'shipped' | 'placeholder';
+const listFor = (set: SceneSet | undefined): SceneData[] => (set === 'placeholder' ? placeholderScenes() : shippedScenes());
 
 const r = (v: number, d = 3) => +v.toFixed(d);
 const f32 = async (p: Physarum, buf: GPUBuffer, bytes: number) => new Float32Array(await p.debugRead(buf, bytes));
@@ -37,6 +42,8 @@ interface Run {
   stats: Pick<TrailStats, 'mean' | 'coverage' | 'cells'>;
   share: { physarum: number; followers: number; boids: number };
   pen: { x: number; y: number; radiusCells: number };
+  /** The picture as the display draws it (RGBA, small), taken at `shotAt`, or null. A click's warm glow exists only here, not in the trail. */
+  shot: Uint8ClampedArray | null;
 }
 
 interface RunOptions {
@@ -47,6 +54,8 @@ interface RunOptions {
   penFrom?: number;
   /** Click (the accent) at this step. */
   clickAt?: number;
+  /** Draw the display (160 x 90) after this step and keep it in `shot`. */
+  shotAt?: number;
   steps?: number;
   seed?: number;
 }
@@ -63,11 +72,13 @@ async function run(p: Physarum, analyzeTrail: (t: Float32Array, W: number, H: nu
   p.reset(seed);
   if (o.pen && !o.penFrom) p.setPen(o.pen.x, o.pen.y, true);
   else p.setPen(0.5, 0.5, false);
+  let shot: Uint8ClampedArray | null = null;
   for (let i = 0; i < steps; i++) {
     if (o.pen && o.penFrom === i) p.setPen(o.pen.x, o.pen.y, true);
     if (o.clickAt === i) d.accent(o.pen?.x ?? 0.5, o.pen?.y ?? 0.5);
     d.update();
     p.step();
+    if (o.shotAt === i) shot = (await p.renderToPixels(160, 90)).data;
     if (i % 100 === 99) await p.whenIdle();
   }
   await p.whenIdle();
@@ -101,6 +112,7 @@ async function run(p: Physarum, analyzeTrail: (t: Float32Array, W: number, H: nu
     stats: { mean: ts.mean, coverage: ts.coverage, cells: ts.cells },
     share: { physarum: r(ePhys / total), followers: r(eFol / total), boids: r(eBoid / total) },
     pen: { x: o.pen?.x ?? 0.5, y: o.pen?.y ?? 0.5, radiusCells: (q.penRadius * H) / BLOCK },
+    shot,
   };
 }
 
@@ -122,16 +134,26 @@ function difference(a: Run, b: Run, region?: 'inside' | 'outside'): number {
   return n ? sum / n : 0;
 }
 
+/** Mean absolute difference of two on-screen captures, 0 identical, 1 black against white. */
+function screenDifference(a: Run, b: Run): number {
+  if (!a.shot || !b.shot) return 0;
+  let sum = 0;
+  for (let i = 0; i < a.shot.length; i++) if (i % 4 !== 3) sum += Math.abs(a.shot[i] - b.shot[i]);
+  return sum / ((a.shot.length / 4) * 3 * 255);
+}
+
 const dominant = (s: Run['share']) => (Object.entries(s).sort((x, y) => y[1] - x[1])[0][0]);
 const rel = (a: number, b: number) => Math.abs(a - b) / Math.max(1e-12, Math.abs(a), Math.abs(b));
 
 /** SPEC 8.8: in each scene the wheel, the pen and the accent make a measurable, visible difference. */
-export async function sceneTest(p: Physarum, analyzeTrail: (t: Float32Array, W: number, H: number) => TrailStats, opts: { steps?: number; seed?: number } = {}) {
+export async function sceneTest(p: Physarum, analyzeTrail: (t: Float32Array, W: number, H: number) => TrailStats, opts: { steps?: number; seed?: number; set?: SceneSet } = {}) {
   const d = director();
   const saved = { ...p.params };
+  const savedScenes = [...d.scenes] as SceneData[];
   const savedIndex = d.index;
   const out: Record<string, unknown>[] = [];
   try {
+    d.setScenes(listFor(opts.set), 0);
     for (let i = 0; i < d.scenes.length; i++) {
       const common = { scene: i, steps: opts.steps ?? 600, seed: opts.seed ?? 7 };
       const pen = { x: 0.5, y: 0.5 };
@@ -144,8 +166,8 @@ export async function sceneTest(p: Physarum, analyzeTrail: (t: Float32Array, W: 
       // nothing about the input.
       const penOn = await run(p, analyzeTrail, { ...common, steps: 590, pen, penFrom: 500 });
       const penOff = await run(p, analyzeTrail, { ...common, steps: 590 });
-      const clicked = await run(p, analyzeTrail, { ...common, steps: 530, clickAt: 500, pen, penFrom: 500 });
-      const quiet = await run(p, analyzeTrail, { ...common, steps: 530, pen, penFrom: 500 });
+      const clicked = await run(p, analyzeTrail, { ...common, steps: 530, clickAt: 500, shotAt: 506, pen, penFrom: 500 });
+      const quiet = await run(p, analyzeTrail, { ...common, steps: 530, shotAt: 506, pen, penFrom: 500 });
       out.push({
         scene: d.scenes[i].name,
         wheel: {
@@ -158,12 +180,12 @@ export async function sceneTest(p: Physarum, analyzeTrail: (t: Float32Array, W: 
           shareAt0: lo.share, shareAt1: hi.share,
         },
         pen: { inside: r(difference(penOn, penOff, 'inside')), outside: r(difference(penOn, penOff, 'outside')), whole: r(difference(penOn, penOff)) },
-        accent: { type: d.scenes[i].accent.type, difference30StepsAfter: r(difference(clicked, quiet)) },
+        accent: { type: d.scenes[i].accent.type, difference30StepsAfter: r(difference(clicked, quiet)), onScreen6StepsAfter: r(screenDifference(clicked, quiet)) },
       });
     }
   } finally {
     Object.assign(p.params, saved);
-    d.setScenes(d.scenes as SceneData[], savedIndex);
+    d.setScenes(savedScenes, savedIndex);
     p.reset();
     p.paused = false;
   }
@@ -171,15 +193,16 @@ export async function sceneTest(p: Physarum, analyzeTrail: (t: Float32Array, W: 
 }
 
 /** One scene switch: the mean trail step by step, against the steady state before it. Runs with the world stepped by hand. */
-export async function transitionTest(p: Physarum, from: number, to: number, opts: { seed?: number } = {}) {
+export async function transitionTest(p: Physarum, from: number, to: number, opts: { seed?: number; set?: SceneSet } = {}) {
   const d = director();
   const saved = { ...p.params };
+  const savedScenes = [...d.scenes] as SceneData[];
   const savedIndex = d.index;
   const W = p.gridWidth;
   const H = p.gridHeight;
   try {
     p.paused = true;
-    d.setScenes(d.scenes as SceneData[], from);
+    d.setScenes(listFor(opts.set), from);
     p.reset(opts.seed ?? 7);
     p.setPen(0.5, 0.5, false);
     const mean = async () => (await f32(p, p.trailBuffer, W * H * 4)).reduce((a, b) => a + b, 0) / (W * H);
@@ -223,7 +246,7 @@ export async function transitionTest(p: Physarum, from: number, to: number, opts
     };
   } finally {
     Object.assign(p.params, saved);
-    d.setScenes(d.scenes as SceneData[], savedIndex);
+    d.setScenes(savedScenes, savedIndex);
     p.reset();
     p.paused = false;
   }

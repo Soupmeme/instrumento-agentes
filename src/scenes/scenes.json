@@ -1,61 +1,61 @@
 [
   {
-    "id": "placeholder-calm",
-    "name": "PLACEHOLDER: calm",
-    "note": "PLACEHOLDER to test the engine, not a real scene. Slow mycelium drifting, the network barely moving. Replace with your own scenes.",
-    "placeholder": true,
+    "id": "gc-plead",
+    "name": "Plead",
+    "note": "Verse 1 (0:00 to 0:43). A nervous system of palpitating axons, delicate and cold, with small points of light riding it. Soft, devoted, reaching. Leave it alone. Click: a heartbeat.",
     "dominant": "physarum",
     "params": {
       "mode": 1,
-      "backgroundPreset": 21,
-      "penPreset": 4,
-      "agentCount": 600000,
-      "decay": 0.8,
-      "inertia": 0.1,
-      "followerCount": 20000,
-      "followerDeposit": 0.02,
-      "fieldKind": 1,
-      "fieldStrength": 0.6,
-      "fieldEvolution": 0.04,
-      "flowToPhysarum": 0.25,
-      "flockCount": 0,
+      "backgroundPreset": 19,
+      "penPreset": 0,
+      "agentCount": 300000,
       "palette": 0,
-      "changeColour": 0.4,
-      "penFieldMode": 1
+      "changeColour": 0.5,
+      "followerCount": 0,
+      "flockCount": 1000,
+      "trailToBoids": 1,
+      "flockSpeed": 2,
+      "flockSepWeight": 2,
+      "flockAliWeight": 0.6,
+      "flockCohWeight": 0.2,
+      "boidDeposit": 0.06,
+      "flockPenMode": 0,
+      "flowToPhysarum": 0.2,
+      "fieldKind": 1,
+      "fieldFrequency": 2,
+      "fieldEvolution": 0.15,
+      "fieldStrength": 1,
+      "inertia": 0.3,
+      "penFieldMode": 0
     },
     "pen": {
-      "radius": 0.22,
-      "description": "PLACEHOLDER: the pen wakes the network, a denser net grows inside the circle and the flow swirls around it."
+      "radius": 0.2,
+      "description": "Wakes the net: it grows finer and brighter around the pointer, as if it noticed you."
     },
     "macro": {
       "entry": 0.5,
-      "description": "PLACEHOLDER: up makes the network a little denser and lets the flow pull slightly harder, down lets it thin and drift.",
+      "description": "Up makes the net sway faster and fuller, down lets it slow and thin.",
       "returnSeconds": 0,
       "entries": [
         {
-          "param": "decay",
-          "min": 0.78,
-          "max": 0.82,
+          "param": "fieldEvolution",
+          "min": 0.08,
+          "max": 0.3,
           "curve": "smooth"
         },
         {
-          "param": "flowToPhysarum",
-          "min": 0.1,
-          "max": 0.22,
-          "curve": "in"
-        },
-        {
           "param": "agentCount",
-          "min": 520000,
-          "max": 660000,
-          "curve": "out"
+          "min": 260000,
+          "max": 340000,
+          "curve": "linear"
         }
       ]
     },
     "accent": {
       "type": "wave",
       "strength": 0.5,
-      "size": 1
+      "size": 1.1,
+      "glow": 1.0
     },
     "entry": {
       "seconds": 1.5,
@@ -65,129 +65,184 @@
     }
   },
   {
-    "id": "placeholder-dense",
-    "name": "PLACEHOLDER: dense",
-    "note": "PLACEHOLDER to test the engine, not a real scene. A crowded swarm riding the veins, warm and busy. Replace with your own scenes.",
-    "placeholder": true,
-    "dominant": "flock",
-    "params": {
-      "mode": 1,
-      "backgroundPreset": 14,
-      "penPreset": 2,
-      "agentCount": 500000,
-      "decay": 0.72,
-      "followerCount": 60000,
-      "followerDeposit": 0.02,
-      "fieldKind": 1,
-      "fieldStrength": 1,
-      "fieldEvolution": 0.1,
-      "flowToPhysarum": 0.4,
-      "flockCount": 30000,
-      "flockSepWeight": 2,
-      "flockAliWeight": 1.5,
-      "flockCohWeight": 0.8,
-      "flockSpeed": 2.5,
-      "flockPenMode": 2,
-      "flockPenStrength": 3,
-      "trailToBoids": 1,
-      "palette": 1,
-      "changeColour": 0.7,
-      "penFieldMode": 1
-    },
-    "pen": {
-      "radius": 0.2,
-      "description": "PLACEHOLDER: the pen is a predator, the swarm parts around the circle while the net inside it changes rules."
-    },
-    "macro": {
-      "entry": 0.5,
-      "description": "PLACEHOLDER: up makes the swarm faster and tighter and brings more followers, down loosens and slows it.",
-      "returnSeconds": 0,
-      "entries": [
-        {
-          "param": "flockCohWeight",
-          "min": 0.4,
-          "max": 0.9,
-          "curve": "smooth"
-        },
-        {
-          "param": "flockSpeed",
-          "min": 2.0,
-          "max": 3.0,
-          "curve": "linear"
-        },
-        {
-          "param": "followerCount",
-          "min": 40000,
-          "max": 90000,
-          "curve": "out"
-        }
-      ]
-    },
-    "accent": {
-      "type": "burst",
-      "strength": 0.8,
-      "size": 1
-    },
-    "entry": {
-      "seconds": 1.2,
-      "easing": "smooth",
-      "burst": "ring",
-      "switchAt": 0.5
-    }
-  },
-  {
-    "id": "placeholder-scattered",
-    "name": "PLACEHOLDER: scattered",
-    "note": "PLACEHOLDER to test the engine, not a real scene. Sparse strokes drawn by the flow across a cool, empty field. Replace with your own scenes.",
-    "placeholder": true,
+    "id": "gc-rupture",
+    "name": "Rupture",
+    "note": "Each scream (0:44, about 0:54, about 2:10, about 2:19). A hard cut: hot, torn, fractured. Press the key on the scream and the next scene key as it falls back. Click: a tear.",
     "dominant": "followers",
     "params": {
       "mode": 1,
       "backgroundPreset": 13,
-      "penPreset": 15,
-      "agentCount": 150000,
-      "decay": 0.7,
-      "followerCount": 150000,
+      "penPreset": 13,
+      "agentCount": 450000,
+      "palette": 1,
+      "changeColour": 1,
+      "followerCount": 60000,
+      "followerSpeed": 4,
+      "followerForce": 0.3,
       "followerDeposit": 0.03,
-      "followerSpeed": 2.5,
-      "fieldKind": 1,
-      "fieldFrequency": 5,
-      "fieldStrength": 1,
-      "fieldEvolution": 0.25,
+      "flockCount": 0,
+      "trailToBoids": 0,
       "flowToPhysarum": 0.6,
-      "flockCount": 6000,
-      "flockPenMode": 2,
-      "flockPenStrength": 4,
-      "trailToBoids": 0.5,
-      "palette": 5,
-      "changeColour": 0.6,
+      "fieldKind": 0,
+      "fieldFrequency": 5,
+      "fieldEvolution": 0.8,
+      "fieldStrength": 1,
+      "inertia": 0.1,
       "penFieldMode": 3
     },
     "pen": {
       "radius": 0.25,
-      "description": "PLACEHOLDER: the pen repels the flow, strokes bend away from the circle and leave a quiet hole."
+      "description": "Tears the flow away from the pointer, leaving a raw hole."
     },
     "macro": {
       "entry": 0.5,
-      "description": "PLACEHOLDER: up makes the flow churn faster and the strokes longer, down calms the field to slow curls.",
+      "description": "Up makes it tear harder and brighter, down lets it crack less.",
       "returnSeconds": 0,
       "entries": [
         {
-          "param": "fieldEvolution",
-          "min": 0.08,
-          "max": 0.45,
-          "curve": "in"
-        },
-        {
-          "param": "followerSpeed",
-          "min": 1.8,
-          "max": 3.4,
+          "param": "flowToPhysarum",
+          "min": 0.4,
+          "max": 0.8,
           "curve": "smooth"
         },
         {
-          "param": "decay",
-          "min": 0.66,
-          "max": 0.76,
+          "param": "fieldEvolution",
+          "min": 0.4,
+          "max": 1.2,
+          "curve": "linear"
+        }
+      ]
+    },
+    "accent": {
+      "type": "ring",
+      "strength": 1.0,
+      "size": 1.2,
+      "glow": 0.3
+    },
+    "entry": {
+      "seconds": 0.05,
+      "easing": "linear",
+      "burst": "ring",
+      "switchAt": 0
+    }
+  },
+  {
+    "id": "gc-retreat",
+    "name": "Retreat",
+    "note": "The soft melancholic plead after the first chorus screams (about 0:46 to 1:33). Sinking and trembling, dimmer and thinner than Plead. Click: a sob.",
+    "dominant": "physarum",
+    "params": {
+      "mode": 1,
+      "backgroundPreset": 19,
+      "penPreset": 2,
+      "agentCount": 220000,
+      "palette": 0,
+      "changeColour": 0.15,
+      "displayGain": 18,
+      "followerCount": 0,
+      "flockCount": 600,
+      "trailToBoids": 1,
+      "flockSpeed": 1.2,
+      "flockSepWeight": 2,
+      "flockAliWeight": 0.6,
+      "flockCohWeight": 0.2,
+      "boidDeposit": 0.06,
+      "flockPenMode": 0,
+      "flockPenStrength": 1.5,
+      "flowToPhysarum": 0.1,
+      "fieldKind": 1,
+      "fieldFrequency": 2,
+      "fieldEvolution": 0.06,
+      "fieldStrength": 1,
+      "inertia": 0.6,
+      "decay": 0.8,
+      "penFieldMode": 0
+    },
+    "pen": {
+      "radius": 0.22,
+      "description": "Calms the net: around the pointer it relaxes into larger, slower cells."
+    },
+    "macro": {
+      "entry": 0.5,
+      "description": "Up lets the net tremble and fill a little, down lets it sink and thin.",
+      "returnSeconds": 0,
+      "entries": [
+        {
+          "param": "inertia",
+          "min": 0.4,
+          "max": 0.8,
+          "curve": "smooth"
+        },
+        {
+          "param": "agentCount",
+          "min": 160000,
+          "max": 280000,
+          "curve": "linear"
+        }
+      ]
+    },
+    "accent": {
+      "type": "wave",
+      "strength": 0.5,
+      "size": 1.0,
+      "glow": 0.5
+    },
+    "entry": {
+      "seconds": 2.5,
+      "easing": "smooth",
+      "burst": "none",
+      "switchAt": 0.5
+    }
+  },
+  {
+    "id": "gc-watching",
+    "name": "Watching",
+    "note": "Verse 2 (about 1:34 to 2:08). The net breaks into many separate glowing orbs that hang in the dark. No literal eyes. Click: a blink.",
+    "dominant": "flock",
+    "params": {
+      "mode": 1,
+      "backgroundPreset": 6,
+      "penPreset": 19,
+      "agentCount": 400000,
+      "palette": 4,
+      "changeColour": 0.4,
+      "followerCount": 0,
+      "flockCount": 1500,
+      "trailToBoids": 0.8,
+      "flockSpeed": 1.6,
+      "flockSepWeight": 2,
+      "flockAliWeight": 1,
+      "flockCohWeight": 0.4,
+      "boidDeposit": 0.05,
+      "flockPenMode": 0,
+      "flockPenStrength": 3,
+      "flowToPhysarum": 0.1,
+      "fieldKind": 1,
+      "fieldFrequency": 2,
+      "fieldEvolution": 0.05,
+      "fieldStrength": 1,
+      "inertia": 0.2,
+      "penFieldMode": 0
+    },
+    "pen": {
+      "radius": 0.2,
+      "description": "Where you point, the orbs dissolve back into living veins."
+    },
+    "macro": {
+      "entry": 0.5,
+      "description": "Up fills the dark with more orbs and light, down lets them thin out.",
+      "returnSeconds": 0,
+      "entries": [
+        {
+          "param": "agentCount",
+          "min": 300000,
+          "max": 520000,
+          "curve": "smooth"
+        },
+        {
+          "param": "flockCount",
+          "min": 800,
+          "max": 3000,
           "curve": "linear"
         }
       ]
@@ -195,10 +250,78 @@
     "accent": {
       "type": "ring",
       "strength": 0.7,
-      "size": 1.3
+      "size": 1.2,
+      "glow": 0.3
     },
     "entry": {
-      "seconds": 2,
+      "seconds": 3,
+      "easing": "smooth",
+      "burst": "none",
+      "switchAt": 0.5
+    }
+  },
+  {
+    "id": "gc-return",
+    "name": "Return",
+    "note": "The plead after chorus 2 screams (about 2:12 to the fade). Heavier than Retreat: denser, the net now worn and weighty. The wheel brings it down for the fade. Click: worship, the net gathers toward you.",
+    "dominant": "physarum",
+    "params": {
+      "mode": 1,
+      "backgroundPreset": 19,
+      "penPreset": 2,
+      "agentCount": 600000,
+      "palette": 0,
+      "changeColour": 0.5,
+      "followerCount": 0,
+      "flockCount": 1500,
+      "trailToBoids": 1.0,
+      "flockSpeed": 1.2,
+      "flockSepWeight": 2,
+      "flockAliWeight": 0.8,
+      "flockCohWeight": 0.5,
+      "boidDeposit": 0.06,
+      "flockPenMode": 0,
+      "flockPenStrength": 2,
+      "flowToPhysarum": 0.3,
+      "fieldKind": 1,
+      "fieldFrequency": 2,
+      "fieldEvolution": 0.1,
+      "fieldStrength": 1,
+      "inertia": 0.5,
+      "decay": 0.82,
+      "penFieldMode": 0
+    },
+    "pen": {
+      "radius": 0.22,
+      "description": "Calms the net around the pointer, heavier than in Retreat."
+    },
+    "macro": {
+      "entry": 0.8,
+      "description": "Down for the fade: the net thins and dims to nothing.",
+      "returnSeconds": 0,
+      "entries": [
+        {
+          "param": "agentCount",
+          "min": 40000,
+          "max": 650000,
+          "curve": "out"
+        },
+        {
+          "param": "displayGain",
+          "min": 8,
+          "max": 30,
+          "curve": "linear"
+        }
+      ]
+    },
+    "accent": {
+      "type": "burst",
+      "strength": 0.8,
+      "size": 1.2,
+      "glow": 0.4
+    },
+    "entry": {
+      "seconds": 2.5,
       "easing": "smooth",
       "burst": "none",
       "switchAt": 0.5

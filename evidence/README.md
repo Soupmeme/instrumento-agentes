@@ -19,6 +19,8 @@ Reports of `await __exp.verify()` (src/verify/gpu_checks.ts). Each file lists, f
 | `verify-2026-10-02-00-40-53.json` | M8: PR-03 with the corrected wording (passes) and the first run of PR-08, which **failed** because the resample shader did not compile and the trail was cleared |
 | `verify-2026-10-02-00-41-14.json` | M8: PR-08 after the shader was fixed (passes) |
 | `verify-2026-10-02-00-43-58.json` | **M8 final run**, all 43 GPU checks on the idle machine, 43 passed (TL-05 included: -0.9%) |
+| `verify-2026-10-02-02-5*.json` and `...-03-01-15.json` | The God Complex scenes becoming the shipped set (UTC 02:5x to 03:01): the scene checks on the placeholder set and on the five shipped scenes (SC-08 to SC-10, which first failed for the click and the pen), SC-10 alone after the click check was extended to the screen and Retreat's sob was strengthened (passes), PR-05 alone after its noise rule was changed (passes) |
+| the largest of those, `verify-2026-10-02-02-59-21.json` | **The latest full run**, 46 GPU checks: 44 pass, SC-09 (the pen is less local than 2 times in three of the five shipped scenes) fails, and PR-05 failed as inconclusive on a noisy run (median ratio 0.44, spread 0.26); PR-05 passes in the rerun after its rule was changed (75th percentile of the rounds under the bound) |
 
 (The M8 reports are dated 2026-10-02 in UTC, 2026-10-01 local.)
 
