@@ -1,0 +1,35 @@
+{
+  "measuredAt": "2026-10-02T00:42:58.772Z",
+  "scene": "PLACEHOLDER: dense",
+  "safe": true,
+  "canvas": [
+    1280,
+    720
+  ],
+  "grid": [
+    1280,
+    720
+  ],
+  "counts": {
+    "physarum": 175000,
+    "followers": 27125,
+    "boids": 10500
+  },
+  "stepMs": {
+    "min": 0.415,
+    "median": 0.487,
+    "max": 0.518
+  },
+  "displayMs": 0.165,
+  "gpuPassMs": {
+    "agent": 0.036,
+    "deposit": 0.035,
+    "diffuse": 0.03,
+    "render": 0.027,
+    "field": 0.003,
+    "followers": 0.004,
+    "flockGrid": 0.016,
+    "flock": 0.245
+  },
+  "gpuTotalMs": 0.396
+}

@@ -1,0 +1,100 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-02T00:39:35.208Z",
+  "done": 4,
+  "total": 4,
+  "current": "PR-06",
+  "results": [
+    {
+      "id": "PR-03",
+      "family": "presentation",
+      "change": "safe mode (key S), on and off",
+      "origin": "new",
+      "pass": false,
+      "seconds": 1.5,
+      "values": {
+        "grid": [
+          1026,
+          899
+        ],
+        "enterMeanBeforeAfter": [
+          0.02053,
+          0.01096
+        ],
+        "leaveMeanBeforeAfter": [
+          0.01096,
+          0.0204
+        ],
+        "worstChangePerFrame": 0.2523
+      },
+      "note": "live loop, dense placeholder scene; the step change is per animation frame (about one simulation step)"
+    },
+    {
+      "id": "PR-04",
+      "family": "presentation",
+      "change": "the canvas size (the display pass)",
+      "origin": "new",
+      "pass": true,
+      "seconds": 0.4,
+      "values": {
+        "hashWithDisplayAt64x48": 547978324,
+        "hashWithDisplayAt1920x1080": 547978324
+      }
+    },
+    {
+      "id": "PR-05",
+      "family": "presentation",
+      "change": "safe mode (the counts at 35%)",
+      "origin": "new",
+      "pass": true,
+      "seconds": 3.3,
+      "values": {
+        "msPerStepFull": 3.44,
+        "msPerStepSafe": 1.343,
+        "medianRatio": 0.392,
+        "spreadOfRounds": 0.172
+      }
+    },
+    {
+      "id": "PR-06",
+      "family": "presentation",
+      "change": "a presentation canvas of 1920 x 1080",
+      "origin": "new",
+      "pass": true,
+      "seconds": 3.6,
+      "values": {
+        "dense": {
+          "stepMsMin": 0.986,
+          "displayMs": 0.208,
+          "totalMs": 1.194,
+          "grid": [
+            1026,
+            899
+          ]
+        },
+        "heavy": {
+          "stepMsMin": 2.507,
+          "displayMs": 0.227,
+          "totalMs": 2.734,
+          "grid": [
+            1026,
+            899
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 1,
+    "failedIds": [
+      "PR-03"
+    ]
+  },
+  "adapter": "",
+  "grid": [
+    1026,
+    899
+  ],
+  "seed": 7
+}

@@ -28,6 +28,7 @@ import diffuseWgsl from './diffuse.wgsl?raw';
 import displayWgsl from './display.wgsl?raw';
 import probeOverlayWgsl from './probe_overlay.wgsl?raw';
 import pickWgsl from './pick.wgsl?raw';
+import resampleWgsl from './resample.wgsl?raw';
 import steeringWgsl from '../steering/steering.wgsl?raw';
 import fieldSampleWgsl from '../flow/field_sample.wgsl?raw';
 import flowBiasWgsl from '../coupling/flow_bias.wgsl?raw';
@@ -48,7 +49,6 @@ export const PROBE_WORDS = 24;
 const VIGNETTE = 0.15;
 const EXT_FLOATS = 64;
 const WORKGROUP = 256;
-const MAX_GRID_SIDE = 1920;
 
 /** Simulation steps per second. The frame loop and every time-based effect use this. */
 export const SIM_HZ = 60;
@@ -61,12 +61,6 @@ const SPAWN_FRACTION = 0.1;
 const SURGE_DECAY = 0.96;
 /** At full surge the boids' pointer weight rises by this factor, and the field edit goes to full strength. */
 const SURGE_BOOST = 3;
-
-/** Simulation grid for a canvas: same aspect, longest side at most MAX_GRID_SIDE. */
-export function simSizeFor(canvasWidth: number, canvasHeight: number): [number, number] {
-  const k = Math.min(1, MAX_GRID_SIDE / Math.max(canvasWidth, canvasHeight));
-  return [Math.max(8, Math.round(canvasWidth * k)), Math.max(8, Math.round(canvasHeight * k))];
-}
 
 export interface PassTimings {
   agent: number;
@@ -333,13 +327,50 @@ export class Physarum {
     return { background: this.bgNow, pen: this.penNow };
   }
 
-  /** Change the simulation grid size. The trail is cleared, agents keep their place. */
+  /**
+   * Change the simulation grid size (only the shape of the window changes it, see presentation.ts).
+   * Agents keep their normalised place and the trail and its delayed copy are carried over to the
+   * new grid with a bilinear filter, so going full screen stretches the picture a little instead of
+   * wiping it.
+   */
   resize(simWidth: number, simHeight: number): void {
     if (simWidth === this.width && simHeight === this.height) return;
-    this.trail.forEach((b) => b.destroy());
+    const { device } = this.gpu;
+    const oldTrail = this.trail[this.cur];
+    const oldSlow = this.slow;
+    const oldDims = [this.width, this.height];
+    // The buffers that are not carried over are released now; the two being read are released after the copy.
+    this.trail.forEach((b) => { if (b !== oldTrail) b.destroy(); });
     this.counter.destroy();
-    this.slow.destroy();
     this.allocateGrid(simWidth, simHeight);
+
+    const uniform = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(uniform, 0, new Uint32Array([oldDims[0], oldDims[1], this.width, this.height]));
+    const pipe = device.createComputePipeline({
+      label: 'resample trail',
+      layout: 'auto',
+      compute: { module: device.createShaderModule({ label: 'resample', code: resampleWgsl }), entryPoint: 'main' },
+    });
+    const enc = device.createCommandEncoder({ label: 'resample trail' });
+    for (const [from, to] of [[oldTrail, this.trail[0]], [oldSlow, this.slow]] as const) {
+      const pass = enc.beginComputePass();
+      pass.setPipeline(pipe);
+      pass.setBindGroup(0, device.createBindGroup({
+        layout: pipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: uniform } },
+          { binding: 1, resource: { buffer: from } },
+          { binding: 2, resource: { buffer: to } },
+        ],
+      }));
+      pass.dispatchWorkgroups(Math.ceil(this.width / 16), Math.ceil(this.height / 16));
+      pass.end();
+    }
+    device.queue.submit([enc.finish()]);
+    // Destroying a buffer that a submitted pass reads is safe: the queue keeps it alive until the work is done.
+    oldTrail.destroy();
+    oldSlow.destroy();
+    uniform.destroy();
   }
 
   private allocateGrid(w: number, h: number): void {
@@ -886,6 +917,37 @@ export class Physarum {
   }
 
   // ---- Test and debug support. Read-backs are for tests only, never in the frame loop. ----
+
+  /** The canvas size the display last drew at, in pixels (the grid is the simulation's size, see presentation.ts). */
+  get canvasPixels(): [number, number] {
+    return [this.canvasWidth, this.canvasHeight];
+  }
+
+  /**
+   * Draw the display pass `count` times into an off-screen texture of the canvas's size and return
+   * the wall time per draw in milliseconds. Dev measurements only (presentation_bench.ts).
+   */
+  async benchRender(count: number, forTimings = false, size?: [number, number]): Promise<number> {
+    const { device, format } = this.gpu;
+    const w = Math.max(1, Math.round(size ? size[0] : this.canvasWidth));
+    const h = Math.max(1, Math.round(size ? size[1] : this.canvasHeight));
+    const texture = device.createTexture({ size: [w, h], format, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    const view = texture.createView();
+    await this.whenIdle();
+    const start = performance.now();
+    for (let i = 0; i < count; i++) {
+      const enc = device.createCommandEncoder({ label: 'bench render' });
+      if (forTimings) this.wantTimings = true; // the frame loop resets this between awaits
+      this.render(enc, view, w, h);
+      device.queue.submit([enc.finish()]);
+      this.afterSubmit();
+      if (forTimings) await this.whenIdle();
+    }
+    await this.whenIdle();
+    const ms = (performance.now() - start) / count;
+    texture.destroy();
+    return ms;
+  }
 
   /**
    * Draw the picture as the display shows it (palette, tone, overlays that are on) into an

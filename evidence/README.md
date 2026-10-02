@@ -15,6 +15,16 @@ Reports of `await __exp.verify()` (src/verify/gpu_checks.ts). Each file lists, f
 | `verify-2026-10-01-02-25-06.json` | TL-06 alone, **before the fix**: fails (surge 1 left after a reset, the two hashes differ) |
 | `verify-2026-10-01-02-26-44.json` | **The final run**, all 38 GPU checks after every code change. 37 passed; TL-05 is inconclusive because another program was using the GPU |
 | `verify-2026-10-01-02-28-59.json`, `...-02-29-15.json`, `...-02-29-30.json` | SC-01 to SC-03 three times in a row after the fix (the pen and accent numbers are identical each time, the dense wheel number is 0.107 to 0.108) |
+| `verify-2026-10-02-00-39-35.json` | M8: the first run of PR-03 to PR-06 (PR-03 failed on its first wording: the mean trail falls 25% in the first frame of safe mode) |
+| `verify-2026-10-02-00-40-53.json` | M8: PR-03 with the corrected wording (passes) and the first run of PR-08, which **failed** because the resample shader did not compile and the trail was cleared |
+| `verify-2026-10-02-00-41-14.json` | M8: PR-08 after the shader was fixed (passes) |
+| `verify-2026-10-02-00-43-58.json` | **M8 final run**, all 43 GPU checks on the idle machine, 43 passed (TL-05 included: -0.9%) |
+
+(The M8 reports are dated 2026-10-02 in UTC, 2026-10-01 local.)
+
+## presentation/
+
+`await __exp.presentationBench({scene, safe, save: true})` (src/verify/presentation_bench.ts): wall time per step (12 blocks of 100 steps), per display pass, and the GPU time of each pass, for the dense placeholder scene (`scene1`) and the heaviest configuration (`heavy`: 1M extended agents, 500k followers, 100k boids), full and safe, with the page opened at `?res=1280x720`, `?res=1920x1080` and `?res=2560x1440`. The grid is 1280 x 720 in all of them. The numbers of the code before M8 (the grid following the canvas) were recorded by hand from the console and are only in EXPLAINER section 8.
 
 ## sweeps/
 

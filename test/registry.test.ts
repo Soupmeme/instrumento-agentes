@@ -25,7 +25,7 @@ const testSource = walk('test', /\.test\.ts$/).map(read).join('\n');
 const selftestSource = walk('src', /selftest.*\.ts$/).map(read).join('\n');
 const gpuChecks = read('src/verify/gpu_checks.ts');
 const explainer = read('EXPLAINER.md');
-const PREFIXES = 'PC|PE|FO|FL|CP|SC|TL';
+const PREFIXES = 'PC|PE|FO|FL|CP|SC|PR|TL';
 const ID = new RegExp(`\\b(?:${PREFIXES})-\\d{2}\\b`, 'g');
 
 test('ids are unique and well formed, and every prediction says what it changes and what it claims', () => {
@@ -47,7 +47,7 @@ test('every family has predictions, and every prediction has at least one check'
 });
 
 test('every CPU check exists: a unit test whose title starts with the id, and no test carries an unknown id', () => {
-  const tagged = new Set([...testSource.matchAll(/test\(\s*'\[((?:PC|PE|FO|FL|CP|SC|TL)-\d{2})\]/g)].map((m) => m[1]));
+  const tagged = new Set([...testSource.matchAll(/test\(\s*'\[((?:PC|PE|FO|FL|CP|SC|PR|TL)-\d{2})\]/g)].map((m) => m[1]));
   for (const p of PREDICTIONS.filter((x) => x.cpu)) assert.ok(tagged.has(p.id), `${p.id} says cpu but no test is titled "[${p.id}] ..."`);
   const known = new Set(PREDICTIONS.map((p) => p.id));
   for (const id of tagged) assert.ok(known.has(id), `a test is tagged [${id}] but the registry has no such prediction`);

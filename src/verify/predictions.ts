@@ -27,6 +27,7 @@ export type Family =
   | 'flock'
   | 'coupling'
   | 'scenes'
+  | 'presentation'
   | 'tools';
 
 export interface Prediction {
@@ -50,6 +51,7 @@ export const FAMILY_NAMES: Record<Family, string> = {
   flock: 'Flocking',
   coupling: 'Coupling and display',
   scenes: 'Scenes and live gestures',
+  presentation: 'Presentation resolution and safe mode',
   tools: 'Verification tools',
 };
 
@@ -358,6 +360,52 @@ export const PREDICTIONS: Prediction[] = [
     id: 'SC-07', family: 'scenes', change: 'scenes.json', origin: 'earlier',
     statement: 'A scene file can never break the instrument: values are clamped or dropped and the validator never throws; the three shipped scenes are all marked PLACEHOLDER.',
     cpu: true,
+  },
+
+  // ------------------------------------------------------------ presentation resolution and safe mode
+  {
+    id: 'PR-01', family: 'presentation', change: 'the size of the screen or window', origin: 'new',
+    history: 'Until M8 the simulation grid followed the canvas: a scene looked and cost different on a window, a 1920 x 1080 projector and a 2560 x 1440 monitor. At 1920 x 1080 the calm placeholder scene had 1,698 closed cells at the middle of the wheel where the 1043 x 910 window it was tuned on gave 123.',
+    statement: 'The simulation grid has a fixed area of 921,600 pixels (1280 x 720 at 16:9) whatever the screen, within 1%, with the longest side at most 1920 (the area then shrinks).',
+    cpu: true,
+  },
+  {
+    id: 'PR-02', family: 'presentation', change: 'the aspect ratio of the screen or window', origin: 'new',
+    statement: 'The grid takes the aspect ratio of the display (16:9, 16:10, 4:3, 21:9, square), within one pixel of rounding.',
+    cpu: true,
+  },
+  {
+    id: 'PR-03', family: 'presentation', change: 'safe mode (key S), on and off', origin: 'new',
+    history: 'Before M8 safe mode shrank the canvas and with it the grid, which cleared the trail on entering and again on leaving. The first wording (the mean trail changes by less than 10% in any step) was wrong: with 35% of the agents depositing, the mean trail falls to about half within a few steps (25% in the first), so the claim became "not cleared, dimmer, and back after leaving".',
+    statement: 'Entering and leaving safe mode keeps the picture: the grid does not change, the trail is not cleared (the mean stays above 30% of what it was, about half is expected because fewer agents deposit) and after leaving it is back within 20% of the starting value.',
+    gpu: true,
+  },
+  {
+    id: 'PR-04', family: 'presentation', change: 'the canvas size (the display pass)', origin: 'new',
+    statement: 'The canvas size changes only what is drawn: the trail, agents and boids after 300 steps are bit for bit the same whether the display is drawn at 64 x 48 or at 1920 x 1080 along the way.',
+    gpu: true,
+  },
+  {
+    id: 'PR-05', family: 'presentation', change: 'safe mode (the counts at 35%)', origin: 'new',
+    history: 'M6 measured a saving of only about 30% and predicted 2.5 times; this one was predicted at 1.8 times and measured on an idle machine, where the flock pass (which grows with the square of the boid count) is most of the cost.',
+    statement: 'Safe mode cuts the step time of the heaviest configuration (1M extended agents, 500k followers, 100k boids) to at most 55% of full quality (median of alternating rounds).',
+    gpu: true,
+  },
+  {
+    id: 'PR-06', family: 'presentation', change: 'a presentation canvas of 1920 x 1080', origin: 'new',
+    statement: 'At a 1920 x 1080 canvas the step plus the display pass take at most 8 ms (half a frame spare) for the dense placeholder scene and for the heaviest configuration.',
+    gpu: true,
+  },
+  {
+    id: 'PR-08', family: 'presentation', change: 'going full screen, or any change in the shape of the window', origin: 'new',
+    history: 'Before M8 a change of the grid cleared the trail and the picture regrew from black.',
+    statement: 'When the grid changes shape the picture is carried over, not cleared: after a resize to a different aspect ratio the mean trail is within 10% of what it was and a coarse version of the picture (32 x 18 blocks) differs from the old one by less than 0.05 of the full tone range.',
+    gpu: true,
+  },
+  {
+    id: 'PR-07', family: 'presentation', change: 'safe mode and back', origin: 'earlier',
+    statement: 'Safe mode runs exactly 35% of the agents, followers and boids, and leaving it restores every count exactly.',
+    selftest: 'safe mode ',
   },
 
   // ------------------------------------------------------------ verification tools

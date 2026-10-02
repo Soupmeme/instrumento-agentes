@@ -243,6 +243,27 @@ Everything GPU-related below ran on one machine (one NVIDIA GeForce RTX 4070, Ch
 
 **Not verified:** any GPU other than this one; 1920 x 1080; the cost of the probe (inconclusive: -1.2%, -1.2% and 0.0% under a shared GPU with the rounds disagreeing by up to 14.7%, and no comparison with the M6 build); the GPU flock against the flock predictions at 10,000 boids (they are on the CPU reference; the GPU against the CPU is the self-test); the overlay on a projector; why the dense placeholder scene's wheel number still moves a little between runs (0.085 to 0.121, 0.107 to 0.108 when repeated; the accent's surge was one cause, the rest unknown); a cold walkthrough of the instrument by another person (from M6); the verdict of every prediction, which is Kiwi's.
 
+## 2026-10-01, M8 (first part): presentation resolution and safe mode
+
+Kiwi chose these two out of M8; the 20 minute run, device-loss recovery and the quality presets are not started. Everything GPU-related ran on one machine (one NVIDIA GeForce RTX 4070, Chrome in the Claude desktop app) with nothing else using the GPU (checked: the game of M7 was not running), seed 7.
+
+**Found by reading the code and measuring first:** the simulation grid followed the canvas, so a scene tuned on a 1043 x 910 window was a different scene on a 1920 x 1080 projector (the calm placeholder scene at the middle of the wheel: 1,698 closed cells on a 1920 x 1080 grid against 123 on the window). My prediction that the larger grid would also cost 1.8 times more was wrong: it cost 1.2 times more in the dense scene and less in the heavy one, because the flock pass is most of the cost and falls when boids spread out. The problem was the look, not the speed.
+
+**Built:**
+- **A fixed grid** (`src/presentation.ts`): area 921,600 pixels (1280 x 720 at 16:9) and the shape of the display, so every 16:9 screen gets the same world and the canvas only upscales it. Step time at 1280 x 720, 1920 x 1080 and 2560 x 1440 canvases: 0.84, 0.85 and 0.86 ms (dense scene); the display pass 0.15 to 0.18 ms.
+- **The picture survives a change of shape** (`resample.wgsl`): going full screen changes the grid for a display that is not 16:9; the trail and its delayed copy are resampled into the new grid instead of cleared.
+- **Safe mode no longer resizes the grid**, so entering and leaving it does not restart the picture. It keeps 35% of the counts and 60% of the canvas. Heaviest configuration (1M agents, 500k followers, 100k boids): 3.4 ms to 0.9 ms per step (3.8 times); dense scene 0.85 to 0.37 ms (2.3 times). In the live loop at 1920 x 1080, 60 steps per second in every one of 30 seconds with S pressed on and off through the real keyboard.
+- **Rehearsal tools:** `?res=1920x1080` (draw to a canvas of that size), `?sim=1.5` (a larger grid), `__exp.presentationBench` (cost of a scene at the page's canvas size, with `save` to `evidence/presentation/`), `window.__safe` (dev hook).
+- Docs: EXPLAINER section 8 (the two sizes, the measurements, safe mode, full screen, what to do on the day, limits), README, DECISIONS, the 8 predictions PR-01 to PR-08 in the registry.
+
+**Tests:** unit tests 142 (3 new: the grid for ten screen shapes, its area and aspect); self-test 77 of 77; GPU checks 43 of 43 on the idle machine (5 new: PR-03 to PR-06 and PR-08; PR-01, PR-02 are unit tests, PR-07 is the existing safe-mode self-test). TL-05, the M7 open item (does following an agent cost anything), passed on the idle machine: -0.9%, rounds within 7.5%. PR-08 failed on its first run (the picture was cleared because my resample shader used `target`, a reserved word in WGSL, and never compiled), which also showed the check can detect a cleared picture.
+
+**Predictions that were wrong (details in DECISIONS.md, M8):** the cost of the larger grid (above); that entering safe mode changes the mean trail by under 10% per step (it falls 25% in the first frame and to about half, because 35% of the agents deposit; the claim was reworded to "not cleared, dimmer, and back after leaving"). The M6 finding that safe mode saves only 30% could not be reproduced and I do not know why.
+
+**Seen:** the safe-mode badge in the live page at a 1920 x 1080 canvas; the HUD's canvas and grid sizes (1920 x 1080 canvas, 1280 x 720 grid).
+
+**Not verified:** any GPU other than this one (the projector's GPU and resolution are unknown); a real full-screen switch (the browser pane does not enter full screen; the resize is checked directly, from 1026 x 899 to 1000 x 750); the look of the upscaled picture on a real projector; safe mode's canvas scale on a slow GPU (it saves nothing measurable here); the 20 minute run, device-loss recovery and quality presets (not started); the cost of the probe against the M6 build (from M7).
+
 ---
 
 ## Self-evaluation (Autoevaluación)
@@ -263,7 +284,7 @@ Date of this self-evaluation (Fecha): ____________
 - Real time at 60 steps per second, measured on one machine: the "Performance and stability" tables in [EXPLAINER.md](EXPLAINER.md) sections 1, 3, 4, 5 and 6, and the milestone entries above (M1 to M6)
 - Interprets the chosen music: the song is not chosen yet, so there is no evidence for this part *(pending)*. What exists: the cue panel with the song's clock (display only) and the scene engine: [`src/cue.ts`](src/cue.ts), [`src/scenes/`](src/scenes/), [SCORE_TEMPLATE.md](SCORE_TEMPLATE.md)
 - No audio analysis anywhere (the music is a plain audio element): [DECISIONS.md](DECISIONS.md) (2026-09-29 entry on the song sources) and [`src/audio.ts`](src/audio.ts)
-- Rehearsal hardening (20 minute run, device loss, full screen at presentation resolution) *(pending, milestone M8)*
+- Presentation resolution and safe mode (M8, first part): a fixed simulation grid whatever the screen, the picture carried over a change of shape, safe mode that does not restart the picture: [EXPLAINER.md](EXPLAINER.md) section 8, [`src/presentation.ts`](src/presentation.ts), the saved measurements in [`evidence/presentation/`](evidence/presentation/). The 20 minute run and device-loss recovery *(pending, rest of M8)*
 
 ### 2. Understanding and verification (Comprensión y verificación): can explain and defend the system, and predict and verify what a parameter does
 

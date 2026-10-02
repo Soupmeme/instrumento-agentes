@@ -25,6 +25,7 @@ import { couplingStats, couplingSweep } from '../coupling/experiments_coupling';
 import { sceneTest, transitionTest, sceneSoak } from '../scenes/experiments_scenes';
 import { sweepShots, type SweepShotsOptions } from '../verify/sweep_shots';
 import { runVerify } from '../verify/gpu_checks';
+import { presentationBench, type BenchOptions } from '../verify/presentation_bench';
 import * as me from './experiments';
 
 const TAU = Math.PI * 2;
@@ -1234,5 +1235,6 @@ export function installExperiments(p: Physarum): void {
     hideSheet,
     sweepShots: (k: keyof PhysarumParams, v: number[], o?: SweepShotsOptions) => sweepShots(p, k, v, o),
     verify: (which?: string[] | string) => runVerify({ p, x: me }, which),
+    presentationBench: (o: BenchOptions) => presentationBench(p, o),
   };
 }

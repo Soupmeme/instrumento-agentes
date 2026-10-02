@@ -1,0 +1,70 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-02T00:40:53.396Z",
+  "done": 2,
+  "total": 2,
+  "current": "PR-08",
+  "results": [
+    {
+      "id": "PR-03",
+      "family": "presentation",
+      "change": "safe mode (key S), on and off",
+      "origin": "new",
+      "pass": true,
+      "seconds": 1.5,
+      "values": {
+        "grid": [
+          1026,
+          899
+        ],
+        "enterMeanBeforeAfter": [
+          0.02053,
+          0.01096
+        ],
+        "leaveMeanBeforeAfter": [
+          0.01096,
+          0.0204
+        ],
+        "worstChangePerFrame": 0.2526,
+        "meanAtStartAndAfterLeaving": [
+          0.02053,
+          0.0204
+        ]
+      },
+      "note": "live loop, dense placeholder scene; the change per frame is informational (the trail dims at once because fewer agents deposit)"
+    },
+    {
+      "id": "PR-08",
+      "family": "presentation",
+      "change": "going full screen, or any change in the shape of the window",
+      "origin": "new",
+      "pass": false,
+      "seconds": 0.1,
+      "values": {
+        "gridBefore": [
+          1026,
+          899
+        ],
+        "gridAfter": [
+          1000,
+          750
+        ],
+        "meanTrailAfterOverBefore": 0,
+        "coarseDifference": 0.4444
+      }
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 1,
+    "failedIds": [
+      "PR-08"
+    ]
+  },
+  "adapter": "",
+  "grid": [
+    1026,
+    899
+  ],
+  "seed": 7
+}

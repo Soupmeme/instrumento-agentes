@@ -1,0 +1,40 @@
+{
+  "status": "done",
+  "startedAt": "2026-10-02T00:41:14.136Z",
+  "done": 1,
+  "total": 1,
+  "current": "PR-08",
+  "results": [
+    {
+      "id": "PR-08",
+      "family": "presentation",
+      "change": "going full screen, or any change in the shape of the window",
+      "origin": "new",
+      "pass": true,
+      "seconds": 0.2,
+      "values": {
+        "gridBefore": [
+          1026,
+          899
+        ],
+        "gridAfter": [
+          1000,
+          750
+        ],
+        "meanTrailAfterOverBefore": 1,
+        "coarseDifference": 0.005
+      }
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "failedIds": []
+  },
+  "adapter": "",
+  "grid": [
+    1026,
+    899
+  ],
+  "seed": 7
+}

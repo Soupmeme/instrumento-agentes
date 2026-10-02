@@ -2,7 +2,8 @@ import { initGpu, resizeCanvas, GpuUnavailableError, type Gpu } from './gpu';
 import { Hud } from './hud';
 import { Song } from './audio';
 import { showMessage, hideMessage, toggleFullscreen } from './ui';
-import { Physarum, simSizeFor, SIM_HZ } from './physarum/physarum';
+import { Physarum, SIM_HZ } from './physarum/physarum';
+import { displaySize, simAreaScale, simGridFor } from './presentation';
 import { DEFAULT_PARAMS, PARAM_SPECS, MODE_EXTENDED, setMode, type PhysarumParams } from './physarum/params';
 import { runSelfTest } from './physarum/selftest';
 import { buildTuning, type Tuning } from './tuning';
@@ -152,7 +153,7 @@ const tuning: Tuning = buildTuning(tuningEl, params, PARAM_SPECS, () => physarum
 function attachDevice(g: Gpu): void {
   gpu = g;
   resizeCanvas(canvas, resolutionScale);
-  const [w, h] = simSizeFor(canvas.width, canvas.height);
+  const [w, h] = simGridFor(...displaySize(canvas), simAreaScale());
   physarum = new Physarum(g, params, w, h);
   physarum.countScale = safeMode ? SAFE_COUNT_SCALE : 1;
   // The director sits between the performer's inputs and the parameters. On the first device it
@@ -176,6 +177,7 @@ function attachDevice(g: Gpu): void {
     dbg.__song = song;
     dbg.__physarum = physarum;
     dbg.__director = director;
+    dbg.__safe = { toggle: toggleSafeMode, get on() { return safeMode; }, get resolutionScale() { return resolutionScale; } };
     dbg.__physarumSelfTest = () => runSelfTest(physarum!);
     dbg.__setMode = (m: number) => {
       setMode(params, m);
@@ -230,8 +232,8 @@ function frame(now: number): void {
   lastFrame = now;
 
   if (resizeCanvas(canvas, resolutionScale)) {
-    const [w, h] = simSizeFor(canvas.width, canvas.height);
-    physarum.resize(w, h);
+    const [w, h] = simGridFor(...displaySize(canvas), simAreaScale());
+    physarum.resize(w, h); // a no-op unless the grid changed (a different aspect ratio), which clears the trail
   }
 
   // Fixed-step simulation (see STEPS_PER_SECOND).

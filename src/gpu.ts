@@ -1,3 +1,5 @@
+import { forcedCanvasSize } from './presentation';
+
 // WebGPU device setup. Kept small and free of app logic so a lost device can be
 // recreated by simply calling initGpu again (see main.ts).
 
@@ -59,8 +61,10 @@ export async function initGpu(canvas: HTMLCanvasElement): Promise<Gpu> {
  */
 export function resizeCanvas(canvas: HTMLCanvasElement, resolutionScale: number): boolean {
   const dpr = window.devicePixelRatio || 1;
-  const w = Math.max(1, Math.floor(canvas.clientWidth * dpr * resolutionScale));
-  const h = Math.max(1, Math.floor(canvas.clientHeight * dpr * resolutionScale));
+  // `?res=1920x1080` (rehearsal): draw to a canvas of that size whatever the window is.
+  const forced = forcedCanvasSize();
+  const w = Math.max(1, Math.floor((forced ? forced[0] : canvas.clientWidth * dpr) * resolutionScale));
+  const h = Math.max(1, Math.floor((forced ? forced[1] : canvas.clientHeight * dpr) * resolutionScale));
   if (canvas.width === w && canvas.height === h) return false;
   canvas.width = w;
   canvas.height = h;

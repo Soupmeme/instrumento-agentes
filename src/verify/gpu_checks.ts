@@ -479,6 +479,174 @@ export const GPU_CHECKS: Record<string, GpuCheck> = {
   },
 
   // ------------------------------------------------------------ tools
+  // ------------------------------------------------------------ presentation resolution and safe mode
+  'PR-03': async (t) => {
+    const { p } = t;
+    const safe = (window as unknown as { __safe?: { toggle: () => void; on: boolean } }).__safe;
+    if (!safe) return { pass: false, values: { error: 'no safe-mode hook (dev server only)' } };
+    const director = (window as unknown as { __director?: { setScenes: (s: unknown[], i: number) => void; scenes: unknown[] } }).__director!;
+    const frames = (n: number) => new Promise<void>((res) => { let k = 0; const tick = () => (++k >= n ? res() : requestAnimationFrame(tick)); requestAnimationFrame(tick); });
+    const mean = async () => {
+      const tr = await f32(p, p.trailBuffer, p.gridWidth * p.gridHeight * 4);
+      let sum = 0;
+      for (let i = 0; i < tr.length; i++) sum += tr[i];
+      return sum / tr.length;
+    };
+    const saved = { ...p.params };
+    director.setScenes(director.scenes, 1);
+    p.paused = false; // the live loop runs, as in a performance
+    p.reset(7);
+    await frames(240); // four simulated seconds
+    const grid0 = [p.gridWidth, p.gridHeight];
+    const out: Record<string, unknown> = { grid: grid0 };
+    let worst = 0;
+    let pass = true;
+    const start = await mean();
+    for (const label of ['enter', 'leave']) {
+      const before = await mean();
+      safe.toggle();
+      let last = before;
+      for (let f = 0; f < 60; f++) {
+        await frames(1);
+        const m = await mean();
+        worst = Math.max(worst, Math.abs(m - last) / Math.max(last, 1e-9));
+        last = m;
+      }
+      pass = pass && p.gridWidth === grid0[0] && p.gridHeight === grid0[1] && last > 0.3 * before;
+      out[`${label}MeanBeforeAfter`] = [r(before, 5), r(last, 5)];
+    }
+    Object.assign(p.params, saved);
+    const back = await mean();
+    out.worstChangePerFrame = r(worst, 4);
+    out.meanAtStartAndAfterLeaving = [r(start, 5), r(back, 5)];
+    return { pass: pass && Math.abs(back / start - 1) <= 0.2, values: out, note: 'live loop, dense placeholder scene; the change per frame is informational (the trail dims at once because fewer agents deposit)' };
+  },
+  'PR-04': async (t) => {
+    const { p } = t;
+    const set: Partial<PhysarumParams> = { flockCount: 5000, followerCount: 5000, agentCount: 100_000 };
+    const small = await stateHash(t, set, { between: () => p.renderToPixels(64, 48).then(() => undefined) });
+    const large = await stateHash(t, set, { between: () => p.renderToPixels(1920, 1080).then(() => undefined) });
+    return { pass: small === large, values: { hashWithDisplayAt64x48: small, hashWithDisplayAt1920x1080: large } };
+  },
+  'PR-05': async (t) => {
+    const { p } = t;
+    const saved = { ...p.params };
+    const savedScale = p.countScale;
+    p.paused = true;
+    try {
+      Object.assign(p.params, extendedSet({ agentCount: 1_000_000, followerCount: 500_000, fieldKind: 1, flockCount: 100_000, flowToPhysarum: 0.25 }));
+      p.setPen(0.5, 0.5, false);
+      p.reset(7);
+      p.countScale = 1;
+      for (let i = 0; i < 300; i++) p.step();
+      await p.whenIdle();
+      const full: number[] = [];
+      const safe: number[] = [];
+      const ratios: number[] = [];
+      for (let round = 0; round < 8; round++) {
+        const measure = async (scale: number) => {
+          p.countScale = scale;
+          return msPerStep(t, 60);
+        };
+        let a: number;
+        let b: number;
+        if (round % 2 === 0) { a = await measure(1); b = await measure(0.35); } else { b = await measure(0.35); a = await measure(1); }
+        full.push(a);
+        safe.push(b);
+        ratios.push(b / a);
+      }
+      const ratio = median(ratios);
+      const sorted = [...ratios].sort((x, y) => x - y);
+      const spread = sorted[6] - sorted[1];
+      return {
+        pass: ratio <= 0.55 && spread < 0.2,
+        values: { msPerStepFull: r(median(full), 3), msPerStepSafe: r(median(safe), 3), medianRatio: r(ratio, 3), spreadOfRounds: r(spread, 3) },
+        note: spread >= 0.2 ? 'inconclusive: the rounds disagree (is another program using the GPU?)' : undefined,
+      };
+    } finally {
+      p.countScale = savedScale;
+      Object.assign(p.params, saved);
+      p.reset();
+      p.paused = false;
+    }
+  },
+  'PR-06': async (t) => {
+    const { p } = t;
+    const director = (window as unknown as { __director?: { setScenes: (s: unknown[], i: number) => void; scenes: unknown[]; index: number } }).__director!;
+    const savedIndex = director.index;
+    const saved = { ...p.params };
+    p.paused = true;
+    const out: Record<string, unknown> = {};
+    let pass = true;
+    try {
+      for (const kind of ['dense', 'heavy'] as const) {
+        if (kind === 'dense') director.setScenes(director.scenes, 1);
+        else Object.assign(p.params, extendedSet({ agentCount: 1_000_000, followerCount: 500_000, fieldKind: 1, flockCount: 100_000, flowToPhysarum: 0.25 }));
+        p.setPen(0.5, 0.5, false);
+        p.reset(7);
+        for (let i = 0; i < 300; i++) p.step();
+        await p.whenIdle();
+        const step: number[] = [];
+        for (let b = 0; b < 6; b++) step.push(await msPerStep(t, 100));
+        const display = await p.benchRender(40, false, [1920, 1080]);
+        const total = Math.min(...step) + display;
+        out[kind] = { stepMsMin: r(Math.min(...step), 3), displayMs: r(display, 3), totalMs: r(total, 3), grid: [p.gridWidth, p.gridHeight] };
+        pass = pass && total <= 8;
+      }
+      return { pass, values: out };
+    } finally {
+      director.setScenes(director.scenes, savedIndex);
+      Object.assign(p.params, saved);
+      p.reset();
+      p.paused = false;
+    }
+  },
+  'PR-08': async (t) => {
+    const { p } = t;
+    const saved = { ...p.params };
+    const w0 = p.gridWidth;
+    const h0 = p.gridHeight;
+    p.paused = true;
+    try {
+      Object.assign(p.params, DEFAULT_PARAMS);
+      p.reset(7);
+      for (let i = 0; i < 400; i++) p.step();
+      await p.whenIdle();
+      const before = await f32(p, p.trailBuffer, w0 * h0 * 4);
+      // A different shape (a 4:3 screen after a 16:9 one), asked for and read back in the same turn,
+      // so nothing in the page's own frame loop can come between.
+      const w1 = 1000;
+      const h1 = 750;
+      p.resize(w1, h1);
+      const afterRead = p.debugRead(p.trailBuffer, w1 * h1 * 4);
+      const after = new Float32Array(await afterRead);
+      const coarse = (tr: Float32Array, w: number, h: number) => {
+        const cols = 32;
+        const rows = 18;
+        const out = new Float32Array(cols * rows);
+        for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+          let sum = 0;
+          let n = 0;
+          for (let y = Math.floor((by * h) / rows); y < Math.floor(((by + 1) * h) / rows); y++) for (let x = Math.floor((bx * w) / cols); x < Math.floor(((bx + 1) * w) / cols); x++) { sum += tr[y * w + x]; n++; }
+          out[by * cols + bx] = Math.tanh((DEFAULT_PARAMS.displayGain * sum) / Math.max(1, n));
+        }
+        return out;
+      };
+      const a = coarse(before, w0, h0);
+      const b = coarse(after, w1, h1);
+      let diff = 0;
+      for (let i = 0; i < a.length; i++) diff += Math.abs(a[i] - b[i]);
+      diff /= a.length;
+      const meanOf = (tr: Float32Array) => tr.reduce((x, y) => x + y, 0) / tr.length;
+      const meanRatio = meanOf(after) / meanOf(before);
+      return { pass: Math.abs(meanRatio - 1) <= 0.1 && diff < 0.05, values: { gridBefore: [w0, h0], gridAfter: [w1, h1], meanTrailAfterOverBefore: r(meanRatio, 3), coarseDifference: r(diff, 4) } };
+    } finally {
+      p.resize(w0, h0);
+      Object.assign(p.params, saved);
+      p.reset();
+      p.paused = false;
+    }
+  },
   'TL-03': async (t) => {
     const { p } = t;
     const set: Partial<PhysarumParams> = { flockCount: 5000, followerCount: 5000, agentCount: 100_000 };
