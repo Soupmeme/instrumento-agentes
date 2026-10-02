@@ -5,7 +5,7 @@ Open questions for Kiwi. Newest last. Work continues on other tasks while these 
 ## Open
 
 1. **Language of LOGBOOK.md and SCORE_TEMPLATE.md.** SPEC section 11 says headings are bilingual (English with Spanish in parentheses) until you say otherwise. Default: bilingual. Confirm or choose one language.
-2. **Song brief.** No SONG_BRIEF.md exists yet. Until it does, only engine milestones and PLACEHOLDER scenes are built (SPEC 8.9.9).
+2. **Song brief.** No SONG_BRIEF.md exists yet (asked for on 2026-10-01, when Kiwi said it is time to craft the scenes). `SONG_BRIEF_TEMPLATE.md` lists the ten items of SPEC 8.9.2, five of them required. Until the brief exists, only PLACEHOLDER scenes are built; when it arrives I run the completeness check (8.9.3), write the result here, and ask one batched list of questions with defaults.
 3. **Curated presets are my aesthetic choice.** The 8 starred presets (slots 0, 2, 4, 13, 14, 15, 19, 21) were picked by eye for being distinct, structured and stable. The song and its scenes should decide what is actually kept, so treat the list as a starting palette, not a decision.
 
 ## Resolved
