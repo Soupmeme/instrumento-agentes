@@ -1,6 +1,6 @@
 // Shared by every Physarum shader (prepended as text, WGSL has no includes).
 
-// Mirrors the uniform buffer written by Physarum.writeParams. All scalars, 28 fields = 112 bytes.
+// Mirrors the uniform buffer written by Physarum.writeParams. All scalars, 29 fields = 116 bytes.
 struct Params {
   width: u32,          // simulation grid size in pixels
   height: u32,
@@ -30,6 +30,7 @@ struct Params {
   paletteMix: f32,      // 0 = all `palette`, 1 = all `paletteB` (display only)
   probe: u32,           // index of the agent the sensor overlay follows, or 0xFFFFFFFF for none (debug only)
   viewMode: u32,        // display buffer view: 0 picture, 1 trail, 2 delayed trail, 3 change, 4 agents per pixel (debug only)
+  glow: f32,            // the accent's glow, 0..1: growing trail is recoloured toward the palette accent (display only)
 }
 
 // One agent. pos is NORMALISED (0..1 across the world) so the simulation grid can be resized

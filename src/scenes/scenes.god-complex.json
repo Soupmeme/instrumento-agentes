@@ -2,7 +2,7 @@
   {
     "id": "gc-plead",
     "name": "Plead",
-    "note": "DRAFT. Verse 1 (0:00 to 0:43). A nervous system of palpitating axons, delicate and cold, with small points of light riding it. Soft, devoted, reaching. Leave it alone.",
+    "note": "DRAFT. Verse 1 (0:00 to 0:43). A nervous system of palpitating axons, delicate and cold, with small points of light riding it. Soft, devoted, reaching. Leave it alone. Click: a heartbeat.",
     "dominant": "physarum",
     "params": {
       "mode": 1,
@@ -10,7 +10,7 @@
       "penPreset": 0,
       "agentCount": 300000,
       "palette": 0,
-      "changeColour": 0.3,
+      "changeColour": 0.5,
       "followerCount": 0,
       "flockCount": 1000,
       "trailToBoids": 1,
@@ -53,8 +53,9 @@
     },
     "accent": {
       "type": "wave",
-      "strength": 0.4,
-      "size": 1
+      "strength": 0.5,
+      "size": 1.1,
+      "glow": 1.0
     },
     "entry": {
       "seconds": 1.5,
@@ -66,7 +67,7 @@
   {
     "id": "gc-rupture",
     "name": "Rupture",
-    "note": "DRAFT. Each scream (0:44, about 0:54, about 2:10, about 2:19). A hard cut: hot, torn, fractured. Press the key on the scream and the next scene key as it falls back.",
+    "note": "DRAFT. Each scream (0:44, about 0:54, about 2:10, about 2:19). A hard cut: hot, torn, fractured. Press the key on the scream and the next scene key as it falls back. Click: a tear.",
     "dominant": "followers",
     "params": {
       "mode": 1,
@@ -113,9 +114,10 @@
       ]
     },
     "accent": {
-      "type": "burst",
-      "strength": 0.9,
-      "size": 1.2
+      "type": "ring",
+      "strength": 1.0,
+      "size": 1.2,
+      "glow": 0.3
     },
     "entry": {
       "seconds": 0.05,
@@ -127,7 +129,7 @@
   {
     "id": "gc-retreat",
     "name": "Retreat",
-    "note": "DRAFT. The soft melancholic plead after the first chorus screams (about 0:46 to 1:33). Sinking and trembling, dimmer and thinner than Plead.",
+    "note": "DRAFT. The soft melancholic plead after the first chorus screams (about 0:46 to 1:33). Sinking and trembling, dimmer and thinner than Plead. Click: a sob.",
     "dominant": "physarum",
     "params": {
       "mode": 1,
@@ -181,8 +183,9 @@
     },
     "accent": {
       "type": "wave",
-      "strength": 0.3,
-      "size": 1.2
+      "strength": 0.2,
+      "size": 0.7,
+      "glow": 0.15
     },
     "entry": {
       "seconds": 2.5,
@@ -194,7 +197,7 @@
   {
     "id": "gc-watching",
     "name": "Watching",
-    "note": "DRAFT. Verse 2 (about 1:34 to 2:08). The net breaks into many separate glowing orbs that hang in the dark. No literal eyes.",
+    "note": "DRAFT. Verse 2 (about 1:34 to 2:08). The net breaks into many separate glowing orbs that hang in the dark. No literal eyes. Click: a blink.",
     "dominant": "flock",
     "params": {
       "mode": 1,
@@ -246,8 +249,9 @@
     },
     "accent": {
       "type": "ring",
-      "strength": 0.6,
-      "size": 1.2
+      "strength": 0.7,
+      "size": 1.2,
+      "glow": 0.3
     },
     "entry": {
       "seconds": 3,
@@ -259,7 +263,7 @@
   {
     "id": "gc-return",
     "name": "Return",
-    "note": "DRAFT. The plead after chorus 2 screams (about 2:12 to the fade). Heavier than Retreat: denser, the net now worn and weighty. The wheel brings it down for the fade.",
+    "note": "DRAFT. The plead after chorus 2 screams (about 2:12 to the fade). Heavier than Retreat: denser, the net now worn and weighty. The wheel brings it down for the fade. Click: worship, the net gathers toward you.",
     "dominant": "physarum",
     "params": {
       "mode": 1,
@@ -311,9 +315,10 @@
       ]
     },
     "accent": {
-      "type": "wave",
-      "strength": 0.5,
-      "size": 1.2
+      "type": "burst",
+      "strength": 0.8,
+      "size": 1.2,
+      "glow": 0.4
     },
     "entry": {
       "seconds": 2.5,

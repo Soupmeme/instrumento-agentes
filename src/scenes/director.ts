@@ -39,6 +39,8 @@ export interface SceneHost {
   triggerWave(x?: number, y?: number, sizeMultiplier?: number): void;
   /** The accent's momentary surge of the pointer's forces, 0..1 (decays by itself in the world). */
   surge(amount: number): void;
+  /** The accent's glow (display only). Optional so a host without it still works. */
+  glow?(amount: number): void;
 }
 
 export interface Change {
@@ -205,6 +207,7 @@ export class Director {
     if (!scene) return;
     const a = scene.accent;
     this.host.surge(a.strength);
+    if (a.glow > 0) this.host.glow?.(a.glow);
     const fraction = 0.04 + 0.16 * a.strength;
     if (a.type === 'wave') this.host.triggerWave(x, y, a.size);
     else this.host.spawn(a.type === 'burst' ? 'center' : 'ring', fraction);

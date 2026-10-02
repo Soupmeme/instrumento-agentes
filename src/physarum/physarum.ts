@@ -40,7 +40,7 @@ import { FlockLayer, MAX_BOIDS, type FlockInput } from '../flock/flock';
 export const MAX_AGENTS = 2_000_000;
 const AGENT_BYTES = 16; // vec2f pos, f32 heading, f32 progress
 const VELOCITY_BYTES = 8; // vec2f, used only by the extended mode (inertia)
-const PARAM_BYTES = 112;
+const PARAM_BYTES = 128;
 /** The probe index when no agent is followed (the agent pass compares its own index against it). */
 const NO_PROBE = 0xffffffff;
 /** Words in the probe buffer (see move.wgsl for what each one holds). */
@@ -61,6 +61,8 @@ const SPAWN_FRACTION = 0.1;
 const SURGE_DECAY = 0.96;
 /** At full surge the boids' pointer weight rises by this factor, and the field edit goes to full strength. */
 const SURGE_BOOST = 3;
+/** The accent's glow fades by this factor per step (about 1.5 s to a tenth). */
+const GLOW_DECAY = 0.975;
 
 export interface PassTimings {
   agent: number;
@@ -172,6 +174,8 @@ export class Physarum {
   private pendingSpawn: 0 | 1 | 2 = 0;
   private pendingFraction = SPAWN_FRACTION;
   private surgeValue = 0;
+  /** The accent's glow: a momentary boost of the change tint (display only), fading by itself. */
+  private glowValue = 0;
   /** Safe mode and quality presets: fraction of the configured agent, follower and boid counts that run (1 = all). */
   countScale = 1;
   /** Which passes ran in the most recent step (for the timing readout). */
@@ -469,6 +473,7 @@ export class Physarum {
     this.nextWave = 0;
     this.pendingSpawn = 0;
     this.surgeValue = 0;
+    this.glowValue = 0;
     this.pen.stirX = 0;
     this.pen.stirY = 0;
     // Presets restart settled on their targets.
@@ -587,6 +592,14 @@ export class Physarum {
     this.surgeValue = Math.max(this.surgeValue, Math.min(1, Math.max(0, amount)));
   }
 
+  /**
+   * The accent's glow (display only): for a second or so, where the trail is growing the picture is recoloured
+   * toward the palette's accent colour, then it fades by itself. Nothing in the simulation reads it.
+   */
+  glow(amount: number): void {
+    this.glowValue = Math.max(this.glowValue, Math.min(1, Math.max(0, amount)));
+  }
+
   get currentSurge(): number {
     return this.surgeValue;
   }
@@ -672,6 +685,7 @@ export class Physarum {
     f[25] = Math.min(1, Math.max(0, p.paletteMix));
     u[26] = this.probeAgent >= 0 ? this.probeAgent >>> 0 : NO_PROBE;
     u[27] = Math.max(0, Math.min(4, Math.floor(this.viewMode)));
+    f[28] = this.glowValue;
     this.gpu.device.queue.writeBuffer(this.paramsBuf, 0, buf);
   }
 
@@ -771,6 +785,7 @@ export class Physarum {
     this.ranLast = ran;
     this.stepRanSinceResolve = true;
     this.surgeValue = this.surgeValue * SURGE_DECAY < 0.01 ? 0 : this.surgeValue * SURGE_DECAY;
+    this.glowValue = this.glowValue * GLOW_DECAY < 0.01 ? 0 : this.glowValue * GLOW_DECAY;
   }
 
   /** Resolves when the GPU has finished everything submitted so far. Tests and tools only. */

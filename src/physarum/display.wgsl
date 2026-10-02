@@ -105,6 +105,14 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   colour = colour + accent * growing * mid * 0.9;
   colour = colour * (1.0 - 0.4 * fading * mid);
 
+  // The accent's glow (a click, display only): where the trail is growing, the colour is replaced by the
+  // palette's accent colour at the same brightness. A tint added on top only whitens a bright palette.
+  if (params.glow > 0.0) {
+    let growth = clamp(max(rate, 0.0) * 6.0, 0.0, 1.0) * params.glow;
+    let lum = dot(colour, vec3f(0.3, 0.59, 0.11));
+    colour = mix(colour, accent * (0.25 + 1.6 * lum), clamp(growth, 0.0, 1.0));
+  }
+
   // A faint vignette: the corners are a little darker, which keeps the eye on the middle.
   let r = length((uv - 0.5) * 2.0);
   colour = colour * (1.0 - params.vignette * smoothstep(0.6, 1.5, r));

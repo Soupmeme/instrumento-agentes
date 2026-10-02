@@ -57,6 +57,8 @@ export interface SceneData {
     strength: number;
     /** Scales the wave width. 1 is the pen size. */
     size: number;
+    /** 0..1: how strongly the palette's accent colour glows where the trail grows for a moment after the click (display only). Default 0. */
+    glow: number;
   };
   entry: {
     /** Seconds of eased transition when the performer switches to this scene. */

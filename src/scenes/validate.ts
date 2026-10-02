@@ -135,6 +135,7 @@ export function validateScene(raw: unknown, index: number): Validated<SceneData>
     type: oneOf(accentRaw.type, ACCENTS, 'wave', 'accent.type', local),
     strength: number01(accentRaw.strength, 0.6, 0, 1, 'accent.strength', local),
     size: number01(accentRaw.size, 1, 0.3, 3, 'accent.size', local),
+    glow: number01(accentRaw.glow, 0, 0, 1, 'accent.glow', local),
   };
   const entryRaw = isObject(raw.entry) ? raw.entry : {};
   const entry = {

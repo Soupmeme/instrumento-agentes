@@ -15,7 +15,7 @@ const fallback: SceneData = {
   params: { mode: 1 },
   pen: { radius: 0.25, description: 'The pen runs the pen preset inside the circle.' },
   macro: { entry: 0.5, description: 'Nothing is bound to the wheel in this scene.', entries: [], returnSeconds: 0 },
-  accent: { type: 'wave', strength: 0.6, size: 1 },
+  accent: { type: 'wave', strength: 0.6, size: 1, glow: 0 },
   entry: { seconds: 1.5, easing: 'smooth', burst: 'none', switchAt: 0.5 },
 };
 
