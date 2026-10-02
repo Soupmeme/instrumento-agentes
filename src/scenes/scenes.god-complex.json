@@ -1,0 +1,112 @@
+[
+  {
+    "id": "gc-plead",
+    "name": "Plead",
+    "note": "DRAFT. Verse 1 (0:00 to 0:43). A nervous system of palpitating axons, delicate and cold, with small points of light riding it. Soft, devoted, reaching. Leave it alone.",
+    "dominant": "physarum",
+    "params": {
+      "mode": 1, "backgroundPreset": 19, "penPreset": 0, "agentCount": 300000, "palette": 0, "changeColour": 0.3,
+      "followerCount": 0, "flockCount": 2500, "trailToBoids": 1, "flockSpeed": 2, "flockSepWeight": 2, "flockAliWeight": 0.6,
+      "flockCohWeight": 0.2, "boidDeposit": 0.1, "flockPenMode": 0, "flowToPhysarum": 0.2, "fieldKind": 1,
+      "fieldFrequency": 2, "fieldEvolution": 0.15, "fieldStrength": 1, "inertia": 0.3, "penFieldMode": 0
+    },
+    "pen": { "radius": 0.2, "description": "Wakes the net: it grows finer and brighter around the pointer, as if it noticed you." },
+    "macro": {
+      "entry": 0.5, "description": "Up makes the net sway faster and fuller, down lets it slow and thin.", "returnSeconds": 0,
+      "entries": [
+        { "param": "fieldEvolution", "min": 0.08, "max": 0.3, "curve": "smooth" },
+        { "param": "agentCount", "min": 260000, "max": 340000, "curve": "linear" }
+      ]
+    },
+    "accent": { "type": "wave", "strength": 0.4, "size": 1 },
+    "entry": { "seconds": 1.5, "easing": "smooth", "burst": "none", "switchAt": 0.5 }
+  },
+  {
+    "id": "gc-rupture",
+    "name": "Rupture",
+    "note": "DRAFT. Each scream (0:44, about 0:54, about 2:10, about 2:19). A hard cut: hot, torn, fractured. Press the key on the scream and the next scene key as it falls back.",
+    "dominant": "followers",
+    "params": {
+      "mode": 1, "backgroundPreset": 13, "penPreset": 13, "agentCount": 450000, "palette": 1, "changeColour": 1,
+      "followerCount": 60000, "followerSpeed": 4, "followerForce": 0.3, "followerDeposit": 0.03, "flockCount": 0,
+      "trailToBoids": 0, "flowToPhysarum": 0.6, "fieldKind": 0, "fieldFrequency": 5, "fieldEvolution": 0.8, "fieldStrength": 1,
+      "inertia": 0.1, "penFieldMode": 3
+    },
+    "pen": { "radius": 0.25, "description": "Tears the flow away from the pointer, leaving a raw hole." },
+    "macro": {
+      "entry": 0.5, "description": "Up makes it tear harder and brighter, down lets it crack less.", "returnSeconds": 0,
+      "entries": [
+        { "param": "flowToPhysarum", "min": 0.4, "max": 0.8, "curve": "smooth" },
+        { "param": "fieldEvolution", "min": 0.4, "max": 1.2, "curve": "linear" }
+      ]
+    },
+    "accent": { "type": "burst", "strength": 0.9, "size": 1.2 },
+    "entry": { "seconds": 0.05, "easing": "linear", "burst": "ring", "switchAt": 0 }
+  },
+  {
+    "id": "gc-retreat",
+    "name": "Retreat",
+    "note": "DRAFT. The soft melancholic plead after the first chorus screams (about 0:46 to 1:33). Sinking and trembling, dimmer and thinner than Plead.",
+    "dominant": "physarum",
+    "params": {
+      "mode": 1, "backgroundPreset": 19, "penPreset": 19, "agentCount": 220000, "palette": 0, "changeColour": 0.15, "displayGain": 18,
+      "followerCount": 0, "flockCount": 1500, "trailToBoids": 1, "flockSpeed": 1.2, "flockSepWeight": 2, "flockAliWeight": 0.6,
+      "flockCohWeight": 0.2, "boidDeposit": 0.1, "flockPenMode": 1, "flockPenStrength": 1.5, "flowToPhysarum": 0.1, "fieldKind": 1,
+      "fieldFrequency": 2, "fieldEvolution": 0.06, "fieldStrength": 1, "inertia": 0.6, "decay": 0.8, "penFieldMode": 0
+    },
+    "pen": { "radius": 0.22, "description": "Draws the little lights toward the pointer, a soft pull." },
+    "macro": {
+      "entry": 0.5, "description": "Up lets the net tremble and fill a little, down lets it sink and thin.", "returnSeconds": 0,
+      "entries": [
+        { "param": "inertia", "min": 0.4, "max": 0.8, "curve": "smooth" },
+        { "param": "agentCount", "min": 160000, "max": 280000, "curve": "linear" }
+      ]
+    },
+    "accent": { "type": "wave", "strength": 0.3, "size": 1.2 },
+    "entry": { "seconds": 2.5, "easing": "smooth", "burst": "none", "switchAt": 0.5 }
+  },
+  {
+    "id": "gc-watching",
+    "name": "Watching",
+    "note": "DRAFT. Verse 2 (about 1:34 to 2:08). The net tightens into a mesh and the many small points of light hover over it and follow. No literal eyes.",
+    "dominant": "flock",
+    "params": {
+      "mode": 1, "backgroundPreset": 4, "penPreset": 4, "agentCount": 400000, "palette": 4, "changeColour": 0.4,
+      "followerCount": 0, "flockCount": 12000, "trailToBoids": 0.9, "flockSpeed": 1.6, "flockSepWeight": 2, "flockAliWeight": 1,
+      "flockCohWeight": 0.4, "boidDeposit": 0.12, "flockPenMode": 2, "flockPenStrength": 3, "flowToPhysarum": 0.1, "fieldKind": 1,
+      "fieldFrequency": 2, "fieldEvolution": 0.05, "fieldStrength": 1, "inertia": 0.2, "penFieldMode": 0
+    },
+    "pen": { "radius": 0.2, "description": "Pushes the watching lights away; they drift back." },
+    "macro": {
+      "entry": 0.5, "description": "Up brings more lights and tightens the net, down lets them thin.", "returnSeconds": 0,
+      "entries": [
+        { "param": "flockCount", "min": 6000, "max": 18000, "curve": "out" },
+        { "param": "flockCohWeight", "min": 0.2, "max": 0.7, "curve": "smooth" }
+      ]
+    },
+    "accent": { "type": "ring", "strength": 0.6, "size": 1.2 },
+    "entry": { "seconds": 3, "easing": "smooth", "burst": "none", "switchAt": 0.5 }
+  },
+  {
+    "id": "gc-return",
+    "name": "Return",
+    "note": "DRAFT. The plead after chorus 2 screams (about 2:12 to the fade). Heavier than Retreat: denser, the net now worn and weighty. The wheel brings it down for the fade.",
+    "dominant": "physarum",
+    "params": {
+      "mode": 1, "backgroundPreset": 19, "penPreset": 19, "agentCount": 600000, "palette": 0, "changeColour": 0.5,
+      "followerCount": 0, "flockCount": 4000, "trailToBoids": 1.0, "flockSpeed": 1.2, "flockSepWeight": 2, "flockAliWeight": 0.8,
+      "flockCohWeight": 0.5, "boidDeposit": 0.12, "flockPenMode": 1, "flockPenStrength": 2, "flowToPhysarum": 0.3, "fieldKind": 1,
+      "fieldFrequency": 2, "fieldEvolution": 0.1, "fieldStrength": 1, "inertia": 0.5, "decay": 0.82, "penFieldMode": 0
+    },
+    "pen": { "radius": 0.22, "description": "Pulls the lights toward the pointer, heavier than in Retreat." },
+    "macro": {
+      "entry": 0.8, "description": "Down for the fade: the net thins and dims to nothing.", "returnSeconds": 0,
+      "entries": [
+        { "param": "agentCount", "min": 40000, "max": 650000, "curve": "out" },
+        { "param": "displayGain", "min": 8, "max": 30, "curve": "linear" }
+      ]
+    },
+    "accent": { "type": "wave", "strength": 0.5, "size": 1.2 },
+    "entry": { "seconds": 2.5, "easing": "smooth", "burst": "none", "switchAt": 0.5 }
+  }
+]

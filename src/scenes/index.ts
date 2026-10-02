@@ -2,7 +2,8 @@
 // problem in the file is logged, never fatal: a scene that cannot be rescued is dropped, and if
 // nothing is left a single default scene keeps the instrument alive.
 
-import raw from './scenes.json';
+import placeholders from './scenes.json';
+import godComplex from './scenes.god-complex.json';
 import { validateScenes } from './validate.ts';
 import type { SceneData } from './types.ts';
 
@@ -18,7 +19,15 @@ const fallback: SceneData = {
   entry: { seconds: 1.5, easing: 'smooth', burst: 'none', switchAt: 0.5 },
 };
 
-export function loadShippedScenes(data: unknown = raw): { scenes: SceneData[]; problems: string[] } {
+/**
+ * Which set starts the instrument. scenes.json (the placeholders the tests and the checks use) is
+ * the default; `?set=god-complex` starts the draft scenes of SONG_BRIEF.md, until Kiwi approves them
+ * and they replace the placeholders.
+ */
+const chosen = (): unknown =>
+  typeof location !== 'undefined' && new URLSearchParams(location.search).get('set') === 'god-complex' ? godComplex : placeholders;
+
+export function loadShippedScenes(data: unknown = chosen()): { scenes: SceneData[]; problems: string[] } {
   const r = validateScenes(data);
   if (r.problems.length) console.warn('scenes.json:', r.problems.join('\n'));
   return { scenes: r.scenes.length ? r.scenes : [fallback], problems: r.problems };
@@ -44,6 +53,11 @@ export function onScenesFileChanged(callback: Listener): void {
 // Vite only recognises a dependency accept at module level, inside this exact form.
 if (import.meta.hot) {
   import.meta.hot.accept('./scenes.json', (mod) => {
+    if (!mod) return;
+    const r = loadShippedScenes((mod as unknown as { default: unknown }).default);
+    window.dispatchEvent(new CustomEvent(EVENT, { detail: { scenes: r.scenes, problems: r.problems } }));
+  });
+  import.meta.hot.accept('./scenes.god-complex.json', (mod) => {
     if (!mod) return;
     const r = loadShippedScenes((mod as unknown as { default: unknown }).default);
     window.dispatchEvent(new CustomEvent(EVENT, { detail: { scenes: r.scenes, problems: r.problems } }));
