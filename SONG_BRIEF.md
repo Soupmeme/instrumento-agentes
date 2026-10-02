@@ -40,7 +40,8 @@ Four states: (1) plead (devotion) in verse 1; (2) the rupture and the retreat in
 It mirrors the plead on the surface and lets the violence show underneath.
 
 ## 9. Per scene notes *(proposed by Claude, accepted by Kiwi: "Yes to 7")*
-- The screams are the click accents (four in all).
+- The screams were first proposed as click accents (four in all). **Kiwi changed this on 2026-10-01:** "I feel like a rupture scene communicates it better and I understand where youre coming from." Each scream is therefore a short hot Rupture scene, reached by a key press and left by another. Claude had recommended the click once, because a scene of a second or two is far shorter than the 15 seconds the protocol advises and costs two key presses per scream; Kiwi decided otherwise and it is built as he decided.
+- Chorus 2: "Scene 4 should be heavier" (the return after the "watching" verse is heavier than the first retreat). "The chorus 2 screams are about at the correct timestamp" (about 2:10 and 2:19).
 - Pen: wake in verse 1, chased or pulled toward you in the chorus, push away in verse 2.
 
 On how the scenes should be made: "What each verse/chorus says would make more sense in how the scenes look. How to represent the core feelings of the singer's state at that point in the song using motion and visuals is the correct bet rather than doing different tiers of softness as an overarching concept." And on the song: "its a song you sit with and ponder with the lyrics, almost as if being handheld by the singer across her mind state."

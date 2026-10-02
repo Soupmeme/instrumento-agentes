@@ -557,3 +557,12 @@ It is the same switch as before (key S or Escape; S also resumes a frozen pictur
 1. **The problem was the look, not the cost** (prediction 1): the grid had to stop following the screen.
 2. **A resize cleared the picture** (PR-08): found while reading `resize`, confirmed by the first run of the check (mean trail 0 after the resize, because my first resample shader named a variable `target`, a reserved word in WGSL, and the pass never ran: a trap I had already avoided by hand in two earlier shaders; the memory notes now say so).
 3. **Full screen cannot be tried in the browser pane here:** pressing Enter did nothing in the pane. The shape change is covered by PR-08 (a resize to 1000 x 750 from 1026 x 899) and the 16:9 canvas by `?res`, not by a real full-screen switch on the projector.
+
+## 2026-10-01, God Complex: scene plan (from SONG_BRIEF.md, approved by Kiwi)
+
+Source: SONG_BRIEF.md (Kiwi's words; Claude's proposals he accepted are marked there). Process: SPEC 8.9 (completeness check in ESCALATIONS.md, questions batched, concern raised once, scene table approved).
+
+**Five scenes: Plead, Rupture, Retreat, Watching, Return.** Plead (verse 1, 0:00 to 0:43), Rupture (each scream), Retreat (the plead after the first chorus's screams), Watching (verse 2, 1:34 to 2:08), Return (the plead after the second chorus's screams, heavier, to the fade). Performed 1, 2, 3, 2, 3, 4, 2, 5, 2, 5, then the wheel down. Four states of the brief became five scenes because the rupture is a scene of its own.
+
+**The screams are a Rupture scene reached by a key, not a click accent. Claude recommended the click; Kiwi decided on the scene ("a rupture scene communicates it better").**
+My reasons for the click, stated once: a scene of one or two seconds is far below the 15 seconds the protocol advises for readability of the keys and the cue panel, and it costs two key presses per scream (in and out) at the most intense moment, eight in the song. The click accent is one input and glows warm through the palette's accent colour. His reason: a whole-picture hot flash says "rupture" better than a glow in the growing trail. Followed as decided. The risk to watch in rehearsal: the double key press at 0:44 and 0:54 (ten seconds apart), and the cue panel showing a scene that lasts two seconds.
